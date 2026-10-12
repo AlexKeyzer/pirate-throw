@@ -1064,7 +1064,7 @@
                         <button id="knopkaAch" class="knopka knopkaAchCvet">AWARDS</button>
                     </div>
                     <button id="knopkaHard" class="knopka serya hardChip">HARDCORE: OFF</button>
-                    <div class="verTag">PIRATE v1.1</div>
+                    <div class="verTag">PIRATE v1.2</div>
                 </div>
 
                 <div id="ekranKarty" class="ekran popup-overlay popup-scale-target skryto">
@@ -1506,6 +1506,7 @@
                     }).then(function (user) {
                         if (user) {
                             self.userId = user.id;
+                            if (user.first_name) playerName = String(user.first_name);
                         }
                     }).catch(function (e) {
                         adLog('VK init warning: ' + e);
@@ -1920,12 +1921,7 @@
                     return true;
                 }
             }
-            if (this.platform === 'vk' && this.vkBridge) {
-                try {
-                    this.vkBridge.send('VKWebAppShowLeaderBoard', {}).catch(function () {});
-                    return true;
-                } catch (e) {}
-            }
+            // В VK нет нативного метода лидерборда в Bridge — всегда показываем свой экран.
             return false;
         },
 
@@ -2183,6 +2179,7 @@
     var dailyLastDate = '';
     var dailyStreak = 0;
     var localLeaders = [];
+    var playerName = '';
 
     // =========================================================
     // ПАУЗА / РЕКЛАМА ПАУЗА
@@ -2368,6 +2365,7 @@
             dailyLastDate: dailyLastDate,
             dailyStreak: dailyStreak,
             leaders: localLeaders,
+            playerName: playerName,
             kvesty: kvesty,
             zvezdy: zvezdy,
             stat: stat,
@@ -2389,6 +2387,8 @@
             if (data.dailyLastDate !== undefined) dailyLastDate = data.dailyLastDate;
             if (data.dailyStreak !== undefined) dailyStreak = data.dailyStreak;
             if (data.leaders) localLeaders = data.leaders;
+            if (typeof data.playerName === 'string' && data.playerName) playerName = data.playerName;
+            localLeaders = localLeaders.map(function (r) { return typeof r === 'number' ? { s: r, d: 0, n: '' } : r; });
             if (data.kvesty) kvesty = data.kvesty;
             if (data.zvezdy) zvezdy = data.zvezdy;
             if (data.stat) stat = data.stat;
@@ -2638,13 +2638,19 @@
             chest_wood: 'WOODEN CHEST',
             chest_silver: 'SILVER CHEST',
             chest_gold: 'GOLDEN CHEST',
-            chest_d1: 'Skin 15% · Apples 85% (3-8)',
-            chest_d2: 'Skin 30% · Apples 70% (10-20)',
-            chest_d3: 'Skin 45% · Apples 55% (25-50)',
+            chest_d1: 'Skin 15% · Coins 85% (3-8)',
+            chest_d2: 'Skin 30% · Coins 70% (10-20)',
+            chest_d3: 'Skin 45% · Coins 55% (25-50)',
             lucky: 'LUCKY!',
             b_daily: 'Daily reward is ready!',
             b_quests: 'Daily quests: up to 12 coins',
             b_chest: 'Chests hold mythic blades!',
+            fx_tap: 'TAP FAST to pry it open sooner!',
+            fx_again: 'OPEN AGAIN',
+            fx_coins: 'GOLD COINS',
+            lb_hint: 'Finish a run — your best voyages will be logged here.',
+            lb_you: 'You',
+            lb_best: 'Best',
             b_share: 'Brag your record to friends!',
             ch1: 'Smuggler Pier', ch2: 'Kraken Bay', ch3: 'Powder Room', ch4: 'Dead Harbor', ch5: 'Coral Reef',
             ch6: 'Ice Latitudes', ch7: 'Storm Cape', ch8: 'Skull Island', ch9: 'Golden Hold', ch10: 'Endless Drift'
@@ -2757,13 +2763,19 @@
             chest_wood: 'ДЕРЕВЯННЫЙ СУНДУК',
             chest_silver: 'СЕРЕБРЯНЫЙ СУНДУК',
             chest_gold: 'ЗОЛОТОЙ СУНДУК',
-            chest_d1: 'Скин 15% · Яблоки 85% (3-8)',
-            chest_d2: 'Скин 30% · Яблоки 70% (10-20)',
-            chest_d3: 'Скин 45% · Яблоки 55% (25-50)',
+            chest_d1: 'Скин 15% · Монеты 85% (3-8)',
+            chest_d2: 'Скин 30% · Монеты 70% (10-20)',
+            chest_d3: 'Скин 45% · Монеты 55% (25-50)',
             lucky: 'УДАЧА!',
             b_daily: 'Дневная награда доступна!',
             b_quests: 'Квесты дня: до 12 монет',
             b_chest: 'В сундуках — мифические клинки!',
+            fx_tap: 'ТАПАЙ БЫСТРО — вскроешь раньше!',
+            fx_again: 'ОТКРЫТЬ ЕЩЁ',
+            fx_coins: 'ЗОЛОТЫЕ МОНЕТЫ',
+            lb_hint: 'Пройди забег — лучшие результаты попадут в список.',
+            lb_you: 'Вы',
+            lb_best: 'Лучший',
             b_share: 'Похвались рекордом друзьям!',
             ch1: 'Пирс контрабандистов', ch2: 'Бухта кракена', ch3: 'Пороховой погреб', ch4: 'Мёртвая гавань', ch5: 'Коралловый риф',
             ch6: 'Ледяные широты', ch7: 'Штормовой мыс', ch8: 'Остров черепа', ch9: 'Золотой трюм', ch10: 'Бесконечный дрейф'
@@ -3269,28 +3281,39 @@
             bestLevel = score;
             obnovitBestScore();
         }
-        localLeaders.push(score);
-        localLeaders.sort(function (a, b) { return b - a; });
-        localLeaders = localLeaders.slice(0, 5);
+        localLeaders.push({ s: score, d: Date.now(), n: playerName });
+        localLeaders.sort(function (a, b) { return b.s - a.s; });
+        localLeaders = localLeaders.slice(0, 10);
         saveData();
         PlatformAdapter.leaderSubmit(score);
     }
 
     function otkrytLeader() {
-        var shown = PlatformAdapter.leaderShow();
-        if (shown) return;
-        if (uiGlavnoeMenu) uiGlavnoeMenu.classList.add('skryto');
+        if (PlatformAdapter.leaderShow()) return;
         var list = document.getElementById('ui_leaderList');
         if (!list) return;
         if (localLeaders.length === 0) {
-            list.innerText = t('leaderEmpty');
+            list.innerHTML = '<div class="lbEmpty"><div class="lbSkull">💀</div>' + t('leaderEmpty') +
+                '<div class="lbFoot">' + t('lb_hint') + '</div></div>';
         } else {
+            var esc = function (x) { return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
             var html = '';
             for (var i = 0; i < localLeaders.length; i++) {
-                html += (i + 1) + '. ' + t('level') + ' ' + localLeaders[i] + '<br>';
+                var r = localLeaders[i];
+                var rank = i === 0 ? '🏆' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : String(i + 1)));
+                var dstr = r.d ? new Date(r.d).toLocaleDateString() : '';
+                html += '<div class="lbRow' + (i === 0 ? ' lbTop1' : '') + '" style="animation-delay:' + (i * 70) + 'ms">' +
+                    '<span class="lbRank">' + rank + '</span>' +
+                    '<span class="lbName">' + esc(r.n || t('lb_you')) + '</span>' +
+                    '<span class="lbVal">' + r.s + '</span>' +
+                    (dstr ? '<span class="lbDate">' + dstr + '</span>' : '') +
+                    '</div>';
             }
+            var bestShown = Math.max(bestLevel, localLeaders[0].s || 0);
+            html += '<div class="lbFoot" style="margin-top:6px;text-align:center;">' + t('lb_best') + ': ' + bestShown + '</div>';
             list.innerHTML = html;
         }
+        if (uiGlavnoeMenu) uiGlavnoeMenu.classList.add('skryto');
         if (ekranLeader) ekranLeader.classList.remove('skryto');
     }
 
@@ -3352,43 +3375,30 @@
 
     window._game = {};
     window._game.zapusk = function (n) { zapuskUrovnya(n); };
-    window._game.chest = function (n) {
+    function chestRoll(n) {
         var cost = n === 1 ? 6 : (n === 2 ? 15 : 40);
-        if (monety < cost) return;
-        dobavitMonety(-cost);
-        playSnd('chest');
-        var roll = Math.random();
         var skinChance = n === 1 ? 0.15 : (n === 2 ? 0.30 : 0.45);
-        var msg;
-        if (roll < skinChance) {
+        if (Math.random() < skinChance) {
             var poolRars = n === 1 ? ['common', 'rare'] : (n === 2 ? ['rare', 'epic'] : ['epic', 'legendary', 'mythic']);
             var pool = vseSkins.filter(function (s) { return poolRars.indexOf(s.redkost) !== -1 && kuplyennyeSkins.indexOf(s.id) === -1; });
             if (n === 3 && Math.random() < 0.3) {
                 var myth = pool.filter(function (s) { return s.redkost === 'mythic'; });
                 if (myth.length) pool = myth;
             }
-            if (pool.length) {
-                var win = pool[Math.floor(Math.random() * pool.length)];
-                kuplyennyeSkins.push(win.id);
-                stat.skinov = kuplyennyeSkins.length;
-                msg = '🗡 ' + t(win.id) + ' (' + t('rar_' + win.redkost) + ')!';
-            } else {
-                dobavitMonety(cost);
-                msg = '+ ' + cost + ' 🍎';
-            }
-        } else {
-            var lo = n === 1 ? 3 : (n === 2 ? 10 : 25);
-            var hi = n === 1 ? 8 : (n === 2 ? 20 : 50);
-            var cnt = lo + Math.floor(Math.random() * (hi - lo + 1));
-            dobavitMonety(cnt);
-            msg = '🪙 x' + cnt;
+            if (pool.length) return { cost: cost, type: 'skin', skin: pool[Math.floor(Math.random() * pool.length)] };
+            return { cost: cost, type: 'coins', cnt: cost };
         }
-        saveData();
-        var tn = document.getElementById('tekstNagrady');
-        if (tn) tn.innerText = msg;
-        if (uiPopupNagrada) uiPopupNagrada.classList.remove('skryto');
-        otrisovatMagazin();
-        updateUI();
+        var lo = n === 1 ? 3 : (n === 2 ? 10 : 25);
+        var hi = n === 1 ? 8 : (n === 2 ? 20 : 50);
+        var cnt = lo + Math.floor(Math.random() * (hi - lo + 1));
+        return { cost: cost, type: 'coins', cnt: cnt };
+    }
+
+    window._game.chest = function (n) {
+        var res = chestRoll(n);
+        if (monety < res.cost) return;
+        dobavitMonety(-res.cost);
+        fxStart(n, res);
     };
     window._game.achZabrat = function (id) {
         for (var i = 0; i < ACH.length; i++) {
@@ -4147,9 +4157,320 @@
     }
 
     // =========================================================
+    // CHEST SHOW — вскрытие сундука с анимацией
+    // =========================================================
+    var chestShowEl = null;
+    var FX = {
+        on: false, phase: '', n: 1, taps: 0, res: null, rar: 'coin', col: '#ffd76a',
+        dur: 1500, minDur: 700, t0: 0, lastTick: 0, raf: 0,
+        parts: [], dpr: 1, el: {}
+    };
+    var FX_COLS = { coin: '#ffd76a', common: '#b8c4d0', rare: '#4aa3ff', epic: '#b45cff', legendary: '#ff9a3c', mythic: '#ff4d6d' };
+    var FX_CONF = ['#ffd76a', '#4aa3ff', '#b45cff', '#ff9a3c', '#ff4d6d', '#7dff8a', '#ffffff'];
+
+    function fxShow() { return document.getElementById('chestShow'); }
+
+    function fxResize() {
+        var c = FX.el.canvas;
+        if (!c) return;
+        FX.dpr = Math.min(2, window.devicePixelRatio || 1);
+        var w = window.innerWidth, h = window.innerHeight;
+        c.width = Math.floor(w * FX.dpr);
+        c.height = Math.floor(h * FX.dpr);
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+    }
+
+    function emitSparks(n, inten) {
+        var r = fxShow().getBoundingClientRect();
+        var cx = r.width / 2, cy = r.height * 0.56;
+        for (var i = 0; i < n; i++) {
+            FX.parts.push({
+                t: 'spark', x: cx + (Math.random() * 90 - 45) * (0.4 + inten), y: cy,
+                vx: (Math.random() * 2 - 1) * 2.2, vy: -(1 + Math.random() * 2.6) * (0.6 + inten),
+                g: 0.06, life: 1, dec: 0.02 + Math.random() * 0.02, col: FX.col, sz: 1 + Math.random() * 2
+            });
+        }
+        if (FX.parts.length > 420) FX.parts.splice(0, FX.parts.length - 420);
+    }
+
+    function emitAt(x, y, n) {
+        for (var i = 0; i < n; i++) {
+            FX.parts.push({
+                t: 'spark', x: x, y: y, vx: (Math.random() * 2 - 1) * 3, vy: -(Math.random() * 3),
+                g: 0.08, life: 1, dec: 0.04, col: Math.random() < 0.7 ? FX.col : '#ffffff', sz: 1 + Math.random() * 2
+            });
+        }
+    }
+
+    function emitConfetti(n) {
+        var r = fxShow().getBoundingClientRect();
+        for (var i = 0; i < n; i++) {
+            FX.parts.push({
+                t: 'conf', x: Math.random() * r.width, y: -20 - Math.random() * r.height * 0.4,
+                vx: (Math.random() * 2 - 1) * 1.2, vy: 1.5 + Math.random() * 2.5, g: 0.02,
+                life: 1, dec: 0.004 + Math.random() * 0.004, rot: Math.random() * 6.28,
+                vr: (Math.random() * 2 - 1) * 0.3, sz: 5 + Math.random() * 6,
+                col: FX_CONF[i % FX_CONF.length]
+            });
+        }
+    }
+
+    function emitBurst() {
+        var r = fxShow().getBoundingClientRect();
+        var cx = r.width / 2, cy = r.height * 0.56;
+        var n = 70 + (FX.rar === 'legendary' ? 40 : 0) + (FX.rar === 'mythic' ? 70 : 0);
+        for (var i = 0; i < n; i++) {
+            var a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 7;
+            FX.parts.push({
+                t: 'spark', x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5, g: 0.09,
+                life: 1, dec: 0.012 + Math.random() * 0.02, col: Math.random() < 0.5 ? FX.col : '#ffffff', sz: 1 + Math.random() * 2.5
+            });
+        }
+        for (i = 0; i < 26; i++) {
+            var a2 = Math.random() * Math.PI * 2, sp2 = 1.5 + Math.random() * 4;
+            FX.parts.push({
+                t: 'coin', x: cx, y: cy, vx: Math.cos(a2) * sp2, vy: Math.sin(a2) * sp2 - 4.5, g: 0.16,
+                life: 1, dec: 0.008 + Math.random() * 0.008, rot: Math.random() * 6.28,
+                vr: (Math.random() * 2 - 1) * 0.25, sz: 14 + Math.random() * 14
+            });
+        }
+        if (FX.rar === 'epic' || FX.rar === 'legendary' || FX.rar === 'mythic') emitConfetti(60);
+    }
+
+    function drawParts(ctx) {
+        for (var i = FX.parts.length - 1; i >= 0; i--) {
+            var p = FX.parts[i];
+            p.x += p.vx; p.y += p.vy; p.vy += p.g; p.life -= p.dec;
+            if (p.rot !== undefined) p.rot += p.vr;
+            if (p.life <= 0 || p.y > window.innerHeight + 60) { FX.parts.splice(i, 1); continue; }
+            ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+            if (p.t === 'coin') {
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
+                if (kartinkaYabloko) ctx.drawImage(kartinkaYabloko, -p.sz / 2, -p.sz / 2, p.sz, p.sz);
+                ctx.restore();
+            } else if (p.t === 'conf') {
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
+                ctx.fillStyle = p.col; ctx.fillRect(-p.sz / 2, -p.sz / 4, p.sz, p.sz / 2);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = p.col;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.sz, 0, 6.2832); ctx.fill();
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    function fxLoop(ts) {
+        if (!FX.on) return;
+        if (FX.phase === 'shake') {
+            var el = ts - FX.t0;
+            if (el - FX.lastTick > 75) {
+                FX.lastTick = el;
+                var inten = Math.min(1, el / FX.dur);
+                playSnd('tap');
+                var cw = FX.el.chest;
+                if (cw) {
+                    var j = 2 + inten * 8;
+                    var tilt = (Math.random() * 2 - 1) * (1 + inten * 7);
+                    cw.style.transform = 'translate(-50%,-50%) translate(' + ((Math.random() * 2 - 1) * j).toFixed(1) + 'px,' +
+                        ((Math.random() * 2 - 1) * j).toFixed(1) + 'px) rotate(' + tilt.toFixed(1) + 'deg)';
+                }
+                emitSparks(2 + Math.floor(inten * 6), inten);
+                if (FX.el.seam) FX.el.seam.style.opacity = (inten * 0.85).toFixed(2);
+                if (FX.el.glow) FX.el.glow.style.opacity = (0.2 + inten * 0.8).toFixed(2);
+            }
+            if (el >= FX.dur) fxBurst();
+        }
+        var ctx = FX.el.ctx;
+        if (ctx) {
+            ctx.setTransform(FX.dpr, 0, 0, FX.dpr, 0, 0);
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            drawParts(ctx);
+        }
+        FX.raf = requestAnimationFrame(fxLoop);
+    }
+
+    function fxStart(n, res) {
+        var show = fxShow();
+        if (!show || FX.on) return;
+        FX.on = true; FX.phase = 'shake'; FX.n = n; FX.res = res; FX.taps = 0;
+        // награда начисляется сразу: закрытие вкладки посреди анимации не теряет лут
+        if (res.type === 'skin') {
+            kuplyennyeSkins.push(res.skin.id);
+            stat.skinov = kuplyennyeSkins.length;
+        } else {
+            dobavitMonety(res.cnt);
+        }
+        saveData(); updateUI();
+        FX.rar = res.type === 'skin' ? res.skin.redkost : 'coin';
+        FX.col = FX_COLS[FX.rar] || FX_COLS.coin;
+        show.style.setProperty('--fxcol', FX.col);
+        show.className = 'on';
+        FX.el.chest.className = n === 2 ? 'fx-tint-silver' : (n === 3 ? 'fx-tint-gold' : '');
+        FX.el.chest.style.transform = 'translate(-50%,-50%)';
+        FX.el.glow.style.opacity = 0;
+        FX.el.seam.style.opacity = 0;
+        FX.el.reward.className = '';
+        FX.el.btns.style.opacity = 0;
+        FX.el.btns.style.pointerEvents = 'none';
+        FX.el.hint.innerText = t('fx_tap');
+        fxResize();
+        FX.parts = [];
+        var base = 1500 + ({ rare: 200, epic: 450, legendary: 750, mythic: 950 }[FX.rar] || 0);
+        FX.dur = base; FX.minDur = base * 0.45;
+        FX.t0 = performance.now(); FX.lastTick = 0;
+        playSnd('uiopen');
+        FX.raf = requestAnimationFrame(fxLoop);
+    }
+
+    function fxBurst() {
+        FX.phase = 'burst';
+        var show = fxShow();
+        show.classList.add('burst');
+        show.classList.add('quake');
+        setTimeout(function () { show.classList.remove('quake'); }, 480);
+        if (FX.el.chest) FX.el.chest.style.transform = 'translate(-50%,-50%)';
+        playSnd('uiopen');
+        if (FX.rar === 'mythic' || FX.rar === 'legendary') playSnd('legendary');
+        emitBurst();
+        setTimeout(fxReveal, 300);
+    }
+
+    function countUp(cnt) {
+        var t0 = performance.now();
+        var dur = 800;
+        var last = -1;
+        var step = function (ts) {
+            var el = Math.min(1, (ts - t0) / dur);
+            var eased = 1 - Math.pow(1 - el, 3);
+            var v = Math.round(cnt * eased);
+            var node = document.getElementById('fxCnt');
+            if (node && v !== last) {
+                node.innerText = v;
+                if (v > 0 && v % 4 === 0) playSnd('coinone');
+                last = v;
+            }
+            if (el < 1) requestAnimationFrame(step);
+            else playSnd('coinflow');
+        };
+        requestAnimationFrame(step);
+    }
+
+    function fxReveal() {
+        FX.phase = 'reveal';
+        var show = fxShow();
+        show.classList.add('reveal');
+        if (FX.rar === 'mythic') show.classList.add('mythic');
+        var res = FX.res;
+        if (!res) return;
+        var img = FX.el.rewardImg, amt = FX.el.amt, rar = FX.el.rar, name = FX.el.name;
+        if (res.type === 'skin') {
+            var k = kartinkiOruzhiya[res.skin.id];
+            img.style.width = '';
+            img.src = k ? k.src : res.skin.file;
+            amt.innerHTML = '';
+            rar.className = 'redkostLabel rl-' + res.skin.redkost;
+            rar.innerText = t('rar_' + res.skin.redkost);
+            name.innerText = t(res.skin.id);
+            name.style.color = FX.col;
+        } else {
+            img.src = kartinkaYabloko ? kartinkaYabloko.src : 'apple.png';
+            img.style.width = 'min(120px, 30vw)';
+            rar.className = '';
+            rar.innerText = '';
+            name.innerText = t('fx_coins');
+            name.style.color = '#ffd76a';
+            amt.innerHTML = '<img src="apple.png" alt="" style="width:1.1em;height:1.1em;vertical-align:-0.2em;"> × <span id="fxCnt">0</span>';
+            countUp(res.cnt);
+        }
+        if (res.type === 'coins') playSnd('win');
+        else if (FX.rar === 'mythic' || FX.rar === 'legendary') { playSnd('legendary'); playSnd('sparkle'); }
+        else if (FX.rar === 'epic') { playSnd('sparkle'); playSnd('win'); }
+        else { playSnd('win'); playSnd('sparkle'); }
+        setTimeout(fxShowButtons, 650);
+    }
+
+    function fxShowButtons() {
+        var btns = FX.el.btns;
+        if (!btns) return;
+        var res = FX.res;
+        var cost = res ? res.cost : 6;
+        var can = monety >= cost;
+        FX.el.claim.innerText = t('claim');
+        FX.el.again.innerText = t('fx_again') + ' (' + cost + ' 🍎)';
+        FX.el.again.style.opacity = can ? 1 : 0.45;
+        FX.el.again.disabled = !can;
+        if (res && res.type === 'skin') {
+            FX.el.equip.style.display = '';
+            FX.el.equip.innerText = t('equip');
+        } else {
+            FX.el.equip.style.display = 'none';
+        }
+        btns.style.opacity = 1;
+        btns.style.pointerEvents = 'auto';
+    }
+
+    function fxClose() {
+        cancelAnimationFrame(FX.raf);
+        FX.on = false; FX.phase = '';
+        var show = fxShow();
+        if (show) show.className = '';
+        FX.parts = [];
+        if (sostoyanieIgry === 'MENU') otrisovatMagazin();
+    }
+
+    function fxInit() {
+        chestShowEl = fxShow();
+        if (!chestShowEl) return;
+        FX.el = {
+            canvas: document.getElementById('fxCanvas'),
+            rays: document.getElementById('fxRaysWrap'),
+            glow: document.getElementById('fxGlow'),
+            chest: document.getElementById('fxChestWrap'),
+            lid: document.getElementById('fxLid'),
+            body: document.getElementById('fxBody'),
+            seam: document.getElementById('fxSeam'),
+            reward: document.getElementById('fxReward'),
+            rewardImg: document.getElementById('fxRewardImg'),
+            amt: document.getElementById('fxAmt'),
+            rar: document.getElementById('fxRar'),
+            name: document.getElementById('fxName'),
+            hint: document.getElementById('fxHint'),
+            btns: document.getElementById('fxBtns'),
+            again: document.getElementById('fxAgain'),
+            equip: document.getElementById('fxEquip'),
+            claim: document.getElementById('fxClaim')
+        };
+        FX.el.ctx = FX.el.canvas ? FX.el.canvas.getContext('2d') : null;
+        fxResize();
+        chestShowEl.addEventListener('pointerdown', function (e) {
+            if (!FX.on || FX.phase !== 'shake') return;
+            FX.dur = Math.max(FX.minDur, FX.dur - 140);
+            playSnd('tap');
+            var r = chestShowEl.getBoundingClientRect();
+            emitAt(e.clientX - r.left, e.clientY - r.top, 4);
+        });
+        FX.el.claim.onclick = function () { fxClose(); };
+        FX.el.equip.onclick = function () {
+            if (FX.res && FX.res.type === 'skin') {
+                window._game.vybratSkin(FX.res.skin.id);
+                FX.el.equip.style.display = 'none';
+            }
+        };
+        FX.el.again.onclick = function () {
+            var n = FX.n;
+            fxClose();
+            window._game.chest(n);
+        };
+        window.addEventListener('resize', fxResize);
+    }
+
+    // =========================================================
     // ЗАПУСК
     // =========================================================
     function initGame() {
+        fxInit();
         loadVkBridge(function () {
             PlatformAdapter.init().then(function () {
                 currentLang = PlatformAdapter.getLanguage();
@@ -4189,12 +4510,113 @@
     nastroikaEkrana();
 })();
 </script>
-    <div id="toastShar" class="toastShar"></div>
+    <div id="chestShow">
+    <div id="fxRaysWrap"><div id="fxRays"></div></div>
+    <div id="fxGlow"></div>
+    <div id="fxChestWrap">
+        <img id="fxBody" src="chest.png" alt="">
+        <img id="fxLid" src="chest.png" alt="">
+        <div id="fxSeam"></div>
+    </div>
+    <canvas id="fxCanvas"></canvas>
+    <div id="fxReward">
+        <div id="fxImgWrap"><div id="fxAura"></div><img id="fxRewardImg" src="" alt=""></div>
+        <div id="fxAmt"></div>
+        <div id="fxRar" class="redkostLabel"></div>
+        <div id="fxName"></div>
+    </div>
+    <div id="fxHint"></div>
+    <div id="fxBtns">
+        <button id="fxClaim" class="knopka"></button>
+        <button id="fxEquip" class="knopka knopkaAchCvet"></button>
+        <button id="fxAgain" class="knopka knopkaLeader"></button>
+    </div>
+    <div id="fxFlash"></div>
+</div>
+<div id="toastShar" class="toastShar"></div>
     <style>
         .toastShar { position: fixed; left: 50%; bottom: 8%; transform: translateX(-50%) translateY(20px);
             background: rgba(0,0,0,.8); color: #7cfc00; padding: 8px 16px; border-radius: 20px;
             font-size: 13px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 99; }
         .toastShar.pokazat { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ================= CHEST SHOW ================= */
+        #chestShow { display: none; position: fixed; inset: 0; z-index: 300; overflow: hidden;
+            background: radial-gradient(circle at 50% 60%, rgba(46,32,14,.90), rgba(6,4,2,.97));
+            -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+            touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+        #chestShow.on { display: block; }
+        #chestShow * { pointer-events: none; }
+        #chestShow #fxBtns button { pointer-events: auto; }
+        #fxCanvas { position: absolute; left: 0; top: 0; }
+        #fxRaysWrap { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+        #fxRays { position: absolute; left: 0; top: 0; width: 170vmax; height: 170vmax; margin: -85vmax 0 0 -85vmax;
+            background: repeating-conic-gradient(from 0deg, var(--fxcol, #ffd76a) 0deg 3deg, transparent 3deg 15deg);
+            border-radius: 50%; mix-blend-mode: screen;
+            -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+            mask-image: radial-gradient(circle, #000 0%, transparent 60%);
+            animation: fxSpin 14s linear infinite; }
+        @keyframes fxSpin { to { transform: rotate(360deg); } }
+        #chestShow.burst #fxRaysWrap { animation: fxRaysIn 1.2s ease-out forwards; }
+        @keyframes fxRaysIn { 0% { opacity: 0; transform: scale(.15); } 30% { opacity: .7; } 100% { opacity: .22; transform: scale(1); } }
+        #fxGlow { position: absolute; left: 50%; top: 56%; width: min(340px, 70vw); height: min(340px, 70vw);
+            transform: translate(-50%, -50%); border-radius: 50%; opacity: 0;
+            background: radial-gradient(circle, var(--fxcol, #ffd76a) 0%, transparent 65%); filter: blur(6px); }
+        #fxChestWrap { position: absolute; left: 50%; top: 56%; width: min(260px, 60vw); height: min(260px, 60vw);
+            transform: translate(-50%, -50%); }
+        #fxLid, #fxBody { position: absolute; left: 0; top: 0; width: 100%;
+            transition: transform .75s cubic-bezier(.25,.7,.3,1), opacity .75s ease, filter .2s ease; }
+        #fxLid { clip-path: inset(0 0 50% 0); }
+        #fxBody { clip-path: inset(50% 0 0 0); }
+        .fx-tint-silver img { filter: grayscale(.55) brightness(1.25); }
+        .fx-tint-gold img { filter: sepia(.5) saturate(1.7) brightness(1.12); }
+        #fxSeam { position: absolute; left: 6%; top: 49%; width: 88%; height: 4px; border-radius: 3px; opacity: 0;
+            background: var(--fxcol, #ffd76a); box-shadow: 0 0 14px 4px var(--fxcol, #ffd76a); transition: opacity .1s; }
+        #chestShow.burst #fxLid { transform: translate(-16%, -80vh) rotate(-26deg); opacity: 0; }
+        #chestShow.burst #fxBody { transform: translate(6%, 62vh) rotate(12deg); opacity: 0; transition-delay: .07s; }
+        #chestShow.burst #fxSeam { opacity: 0 !important; transition: opacity .2s; }
+        #chestShow.burst #fxGlow { animation: fxGlowBurst .8s ease-out forwards; }
+        @keyframes fxGlowBurst { 0% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(2.7); } }
+        #chestShow.quake { animation: fxQuake .45s linear; }
+        @keyframes fxQuake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,4px); } 40% { transform: translate(6px,-5px); } 60% { transform: translate(-5px,-3px); } 80% { transform: translate(4px,3px); } }
+        #fxFlash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+        #chestShow.burst #fxFlash { animation: fxFade .5s ease-out forwards; }
+        @keyframes fxFade { 0% { opacity: .95; } 100% { opacity: 0; } }
+        #fxReward { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%) scale(0); opacity: 0;
+            display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        #chestShow.reveal #fxReward { animation: fxPop .65s cubic-bezier(.34,1.56,.64,1) forwards; }
+        @keyframes fxPop { to { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+        #fxImgWrap { position: relative; }
+        #fxAura { position: absolute; left: 50%; top: 50%; width: 240px; height: 240px; margin: -120px 0 0 -120px; border-radius: 50%;
+            background: radial-gradient(circle, var(--fxcol, #ffd76a) 0%, transparent 62%); opacity: .55; filter: blur(4px);
+            animation: fxAuraPulse 1.6s ease-in-out infinite; }
+        @keyframes fxAuraPulse { 0%,100% { transform: scale(1); opacity: .45; } 50% { transform: scale(1.15); opacity: .7; } }
+        #fxRewardImg { position: relative; width: min(170px, 42vw); }
+        #chestShow.mythic #fxImgWrap { animation: fxMythPulse 2.2s ease-in-out infinite; }
+        @keyframes fxMythPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+        #fxAmt { font-size: 1.4rem; color: #ffd76a; text-shadow: 0 2px 8px #000; min-height: 1.2em; }
+        #fxName { font-size: 1.05rem; text-shadow: 0 2px 6px #000; }
+        #fxHint { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); width: 90%; text-align: center;
+            color: #ffd76a; font-size: 1.05rem; text-shadow: 0 2px 6px #000; animation: fxHintPulse 1s ease-in-out infinite; }
+        @keyframes fxHintPulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+        #chestShow.burst #fxHint, #chestShow.reveal #fxHint { display: none; }
+        #fxBtns { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%);
+            display: flex; flex-direction: column; gap: 8px; width: min(260px, 80vw); opacity: 0; transition: opacity .3s; }
+        #fxBtns button { width: 100%; }
+        .lbRow { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px;
+            background: linear-gradient(90deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
+            border: 1px solid rgba(255,255,255,.10); font-size: 13px; color: #eee;
+            opacity: 0; transform: translateX(-16px); animation: lbIn .38s cubic-bezier(.34,1.56,.64,1) forwards; }
+        .lbRow .lbRank { width: 26px; text-align: center; font-weight: bold; }
+        .lbRow .lbName { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lbRow .lbVal { color: #ffd76a; font-weight: bold; }
+        .lbRow .lbDate { font-size: 10px; color: #999; }
+        .lbRow.lbTop1 { background: linear-gradient(90deg, rgba(255,215,0,.28), rgba(255,215,0,.06));
+            border-color: rgba(255,215,0,.55); box-shadow: 0 0 14px rgba(255,215,0,.25); }
+        @keyframes lbIn { to { opacity: 1; transform: translateX(0); } }
+        .lbEmpty { text-align: center; padding: 18px 10px; color: #cfd8e3; }
+        .lbEmpty .lbSkull { font-size: 34px; }
+        .lbEmpty .lbFoot { font-size: .8rem; opacity: .7; }
     </style>
 </body>
 </html>
