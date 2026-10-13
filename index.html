@@ -2026,6 +2026,12 @@
         if (b) b.classList.add('skrytoBanner');
         document.body.classList.remove('bannerOn');
     }
+    function pokazatBannerReklamu() {
+        // Баннерная реклама — отдельно от плашек: вызывается без всяких панелей интерфейса.
+        if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
+            try { PlatformAdapter.vkBridge.send('VKWebAppShowBannerAd', {}).catch(function () {}); } catch (e) {}
+        }
+    }
     setInterval(function () { if (tbVariants.length) { tbIndex++; showTb(); } }, 15000);
     document.addEventListener('click', function (e) {
         if (e.target && e.target.id === 'tbClose') {
@@ -2034,6 +2040,7 @@
         }
     }, true);
     obnovitBanner();
+    pokazatBannerReklamu();
 
     nastroikaEkrana();
         lastTime = performance.now();
@@ -2798,6 +2805,7 @@
         var hb = el('knopkaHard');
         if (hb) hb.innerText = t('hardkor') + ': ' + (hardkor ? t('on') : t('off'));
         if (typeof obnovitBanner === 'function') obnovitBanner();
+        if (typeof pokazatBannerReklamu === 'function') pokazatBannerReklamu();
         if (el('ui_reward')) el('ui_reward').innerText = t('reward');
         if (el('ui_claim')) el('ui_claim').innerText = t('claim');
         if (el('ui_gameover')) el('ui_gameover').innerText = t('gameover');
