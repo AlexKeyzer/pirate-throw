@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -842,6 +843,8 @@
         .qicon { width: 42px; height: 42px; border-radius: 14px; flex: 0 0 42px;
             background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.25), rgba(0,0,0,.35));
             display: flex; align-items: center; justify-content: center; font-size: 22px; }
+        .coinIcoImg { width: 1.1em; height: 1.1em; vertical-align: -0.2em; }
+        .qicon .coinIcoImg, .coinIcoImg.coinBig { width: 26px; height: 26px; vertical-align: middle; }
         .qbody { flex: 1; text-align: left; }
         .qname { font-size: 12px; color: #fff; margin-bottom: 6px; }
         .kvestBar { width: 100%; height: 10px; background: rgba(0,0,0,.45); border-radius: 6px; overflow: hidden; }
@@ -1003,11 +1006,6 @@
     </style>
 </head>
 <body>
-    <div id="topBanner" class="topBanner skrytoBanner">
-        <span id="tbText"></span>
-        <button id="tbBtn" class="knopka"></button>
-        <button id="tbClose" aria-label="close">✕</button>
-    </div>
     <audio id="bgMusic" src="music.mp3" loop preload="auto"></audio>
     <div class="game-wrapper">
         <div class="game-container" id="gameContainer">
@@ -1036,7 +1034,7 @@
                 </div>
 
                 <div id="panelMonet">
-                    <img src="apple.png" alt="Coins" class="ikonkaMonety">
+                    <img src="coin.png" onerror="this.onerror=null;this.src='apple.png'" alt="Coins" class="ikonkaMonety">
                     <span id="schetMonet">0</span>
                 </div>
 
@@ -2022,30 +2020,11 @@
         if (bb) { bb.innerText = v.btn; bb.onclick = function () { v.act(); }; }
     }
     function obnovitBanner() {
-        var b = document.getElementById('topBanner');
-        if (!b) return;
-        var closed = false;
-        try { closed = !!sessionStorage.getItem('tb_closed'); } catch (e) {}
-        if (closed) { b.classList.add('skrytoBanner'); document.body.classList.remove('bannerOn'); return; }
+        // Верхний баннер-плашка отключён: ничего сверху не выезжает.
         tbVariants = [];
-        if (typeof dailyDostupna === 'function' && dailyDostupna()) tbVariants.push({ text: t('b_daily'), btn: t('daily'), act: function () { otkrytDaily(); } });
-        tbVariants.push({ text: t('b_quests'), btn: t('quests'), act: function () { otkrytKvesty(); } });
-        tbVariants.push({ text: t('b_chest'), btn: t('shop'), act: function () {
-            if (uiGlavnoeMenu) uiGlavnoeMenu.classList.add('skryto');
-            if (uiEkranMagazina) uiEkranMagazina.classList.remove('skryto');
-            otrisovatMagazin();
-        } });
-        tbVariants.push({ text: t('b_share'), btn: t('share'), act: function () {
-            var txt = t('sharetext') + ' ' + bestLevel + '!';
-            if (navigator.share) navigator.share({ text: txt }).catch(function () {});
-            else if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(function () {});
-        } });
-        showTb();
-        b.classList.remove('skrytoBanner');
-        document.body.classList.add('bannerOn');
-        if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
-            try { PlatformAdapter.vkBridge.send('VKWebAppShowBannerAd', {}).catch(function () {}); } catch (e) {}
-        }
+        var b = document.getElementById('topBanner');
+        if (b) b.classList.add('skrytoBanner');
+        document.body.classList.remove('bannerOn');
     }
     setInterval(function () { if (tbVariants.length) { tbIndex++; showTb(); } }, 15000);
     document.addEventListener('click', function (e) {
@@ -2917,7 +2896,7 @@
     // =========================================================
     // ЗАГРУЗКА АССЕТОВ
     // =========================================================
-    var kartinkaYabloko = new Image(); kartinkaYabloko.src = 'apple.png';
+    var kartinkaYabloko = new Image(); kartinkaYabloko.src = 'coin.png';
     var kartinkaBronya = new Image(); kartinkaBronya.src = 'spike.png';
     var kartinkaMeteor = new Image(); kartinkaMeteor.src = 'meteor.png';
     var kartinkaSunduk = new Image(); kartinkaSunduk.src = 'chest.png';
@@ -2959,11 +2938,20 @@
     totalAssets = pngCount + skinImgCount + Object.keys(audioFileList).length;
     updatePreloader();
 
-    [kartinkaYabloko, kartinkaBronya, kartinkaMeteor, kartinkaSunduk, kartinkaArbuz,
+    [kartinkaBronya, kartinkaMeteor, kartinkaSunduk, kartinkaArbuz,
         kartinkaBoss, kartinkaPizza, kartinkaBurger, kartinkaStump, kartinkaGolem].forEach(function (img) {
         img.onload = assetLoaded;
         img.onerror = assetLoaded;
     });
+    // Валюта — монета: основной файл coin.png, резервный apple.png (для старых сборок)
+    kartinkaYabloko.onload = assetLoaded;
+    kartinkaYabloko.onerror = function () {
+        if (String(this.src).indexOf('coin.png') >= 0) { this.src = 'apple.png'; }
+        else { this.onerror = assetLoaded; assetLoaded(); }
+    };
+    function coinIco(cls) {
+        return '<img src="coin.png" onerror="this.onerror=null;this.src=\'apple.png\'" class="coinIcoImg' + (cls ? ' ' + cls : '') + '" alt="">';
+    }
 
     // =========================================================
     // ТУТОРИАЛ
@@ -3073,7 +3061,7 @@
             var btn = cl
                 ? '<button class="knopka serya kvestBtn" disabled>✓</button>'
                 : (got
-                    ? '<button class="knopka kvestBtn" onclick="window._game.achZabrat(\'' + a.id + '\')">' + t('claim') + ' ' + a.r + '</button>'
+                    ? '<button class="knopka kvestBtn" onclick="window._game.achZabrat(\'' + a.id + '\')">' + t('claim') + ' ' + a.r + ' ' + coinIco() + '</button>'
                     : '<span class="kvestProgTekst">' + p + '/' + a.n + '</span>');
             h += '<div class="qcard' + (got && !cl ? ' qgot' : '') + '">' +
                 '<div class="qicon">🏆</div>' +
@@ -3119,14 +3107,14 @@
         if (!box) return;
         var k = kvestySegodnya();
         var h = '';
-        var icons = { apples: '🍎', levels: '⚔️', perfect: '🏆' };
+        var icons = { apples: coinIco('coinBig'), levels: '⚔️', perfect: '🏆' };
         for (var i = 0; i < k.items.length; i++) {
             var it = k.items[i];
             var got = it.p >= it.n;
             var btn = it.claimed
                 ? '<button class="knopka serya kvestBtn" disabled>' + t('qdone') + '</button>'
                 : (got
-                    ? '<button class="knopka kvestBtn" onclick="window._game.kvestZabrat(\'' + it.id + '\')">' + t('claim') + ' ' + KVEST_NAGRADY[it.id] + '</button>'
+                    ? '<button class="knopka kvestBtn" onclick="window._game.kvestZabrat(\'' + it.id + '\')">' + t('claim') + ' ' + KVEST_NAGRADY[it.id] + ' ' + coinIco() + '</button>'
                     : '<span class="kvestProgTekst">' + it.p + '/' + it.n + '</span>');
             h += '<div class="qcard' + (got && !it.claimed ? ' qgot' : '') + '">' +
                 '<div class="qicon">' + (icons[it.id] || '📌') + '</div>' +
@@ -3180,7 +3168,7 @@
         var streakEl = document.getElementById('ui_dailyStreak');
         var amountEl = document.getElementById('ui_dailyAmount');
         if (streakEl) streakEl.innerText = t('dailyStreak') + ' ' + (dailyStreak + 1);
-        if (amountEl) amountEl.innerText = '+' + dailySumma();
+        if (amountEl) amountEl.innerHTML = '+' + dailySumma() + ' ' + coinIco();
         if (uiGlavnoeMenu) uiGlavnoeMenu.classList.add('skryto');
         if (ekranDaily) ekranDaily.classList.remove('skryto');
     }
@@ -3248,7 +3236,7 @@
     };
     var knopkaShar = document.getElementById('knopkaShar');
     if (knopkaShar) knopkaShar.onclick = function () {
-        var txt = t('sharetext') + ' ' + bestLevel + '! 🍎';
+        var txt = t('sharetext') + ' ' + bestLevel + '! 🪙';
         if (navigator.share) {
             navigator.share({ text: txt }).catch(function () {});
         } else if (navigator.clipboard) {
@@ -3507,7 +3495,7 @@
                 bh = '<button class="MknopkaKupit serya" disabled>' + t('chestonly') + '</button>';
             } else {
                 var can = monety >= s.price;
-                bh = '<button class="' + (can ? 'MknopkaKupit' : 'MknopkaKupit serya') + '" onclick="window._game.kupitSkin(\'' + s.id + '\')" ' + (!can ? 'disabled' : '') + '>' + s.price + ' 🍎</button>';
+                bh = '<button class="' + (can ? 'MknopkaKupit' : 'MknopkaKupit serya') + '" onclick="window._game.kupitSkin(\'' + s.id + '\')" ' + (!can ? 'disabled' : '') + '>' + s.price + ' ' + coinIco() + '</button>';
             }
             var src = kartinkiOruzhiya[s.id] ? kartinkiOruzhiya[s.id].src : '';
             var chips = opisanieSkina(s).split(', ').map(function (w) { return '<span class="chip">' + w + '</span>'; }).join('');
@@ -3522,7 +3510,7 @@
         uiSetkaSkinov.innerHTML = h;
         [[1, 6], [2, 15], [3, 40]].forEach(function (c) {
             var b = document.getElementById('chestBtn' + c[0]);
-            if (b) { b.disabled = monety < c[1]; b.innerText = c[1] + ' 🍎'; }
+            if (b) { b.disabled = monety < c[1]; b.innerHTML = c[1] + ' ' + coinIco(); }
         });
         var chestNames = [['ui_chest1', 'chest_wood'], ['ui_chest2', 'chest_silver'], ['ui_chest3', 'chest_gold'],
                           ['ui_chestd1', 'chest_d1'], ['ui_chestd2', 'chest_d2'], ['ui_chestd3', 'chest_d3']];
@@ -4375,13 +4363,13 @@
             name.innerText = t(res.skin.id);
             name.style.color = FX.col;
         } else {
-            img.src = kartinkaYabloko ? kartinkaYabloko.src : 'apple.png';
+            img.src = kartinkaYabloko ? kartinkaYabloko.src : 'coin.png';
             img.style.width = 'min(120px, 30vw)';
             rar.className = '';
             rar.innerText = '';
             name.innerText = t('fx_coins');
             name.style.color = '#ffd76a';
-            amt.innerHTML = '<img src="apple.png" alt="" style="width:1.1em;height:1.1em;vertical-align:-0.2em;"> × <span id="fxCnt">0</span>';
+            amt.innerHTML = coinIco() + ' × <span id="fxCnt">0</span>';
             countUp(res.cnt);
         }
         if (res.type === 'coins') playSnd('win');
@@ -4398,7 +4386,7 @@
         var cost = res ? res.cost : 6;
         var can = monety >= cost;
         FX.el.claim.innerText = t('claim');
-        FX.el.again.innerText = t('fx_again') + ' (' + cost + ' 🍎)';
+        FX.el.again.innerHTML = t('fx_again') + ' (' + cost + ' ' + coinIco() + ')';
         FX.el.again.style.opacity = can ? 1 : 0.45;
         FX.el.again.disabled = !can;
         if (res && res.type === 'skin') {
