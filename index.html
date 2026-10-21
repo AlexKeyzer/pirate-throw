@@ -1,12 +1,13 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Fruit Sniper</title>
-    <meta property="og:title" content="Fruit Sniper">
-    <meta name="vk-game-title" content="Фруктовый Снайпер">
+    <title>PIRATE THROW</title>
+    <meta property="og:title" content="PIRATE THROW">
+    <meta name="vk-game-title" content="PIRATE THROW">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
     <!-- GamePush SDK (грузится неблокирующе, только если мы на их площадке) -->
@@ -925,6 +926,7 @@
             100% { opacity: 1; transform: translateY(0); }
         }
         .chestRow { display: flex; gap: 8px; width: 100%; margin-bottom: 4px; }
+        .chestFreeBtn { margin-top: 4px; font-size: 11px; min-height: 30px; padding: 4px 6px; letter-spacing: 0; }
         .chestCard { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
             background: linear-gradient(170deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
             border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 8px 6px; }
@@ -1048,7 +1050,7 @@
                 </div>
 
                 <div id="glavnoeMenu" class="ekran main-menu popup-scale-target">
-                    <img id="logoIgra" class="game-logo" src="logo_ru.png" alt="Fruit Sniper">
+                    <img id="logoIgra" class="game-logo" src="logo_ru.png" alt="PIRATE THROW">
                     <p class="best-score" id="ui_bestScore">BEST: 0</p>
                     <button id="knopkaIgrat" class="knopka">PLAY</button>
                     <button id="knopkaMagazin" class="knopka knopkaMagazinaCvet">SKINS SHOP</button>
@@ -1062,7 +1064,7 @@
                         <button id="knopkaAch" class="knopka knopkaAchCvet">AWARDS</button>
                     </div>
                     <button id="knopkaHard" class="knopka serya hardChip">HARDCORE: OFF</button>
-                    <div class="verTag">PIRATE v1.2</div>
+                    <div class="verTag">PIRATE THROW v1.3</div>
                 </div>
 
                 <div id="ekranKarty" class="ekran popup-overlay popup-scale-target skryto">
@@ -1901,11 +1903,8 @@
                 ], [score]);
                 adLog('GP leader submit: ' + score);
             }
-            if (this.platform === 'vk' && this.vkBridge) {
-                try {
-                    this.vkBridge.send('VKWebAppShowLeaderBoard', { user_result: score }).catch(function () {});
-                } catch (e) {}
-            }
+            // VK: VKWebAppShowLeaderBoard из сабмита УДАЛЁН — он лишь показывает пустой
+            // нативный борд (запись требует серверного Scores API). «ТОП» открывает localLeaders.
         },
 
         leaderShow: function () {
@@ -2027,10 +2026,9 @@
         document.body.classList.remove('bannerOn');
     }
     function pokazatBannerReklamu() {
-        // Баннерная реклама — отдельно от плашек: вызывается без всяких панелей интерфейса.
-        if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
-            try { PlatformAdapter.vkBridge.send('VKWebAppShowBannerAd', {}).catch(function () {}); } catch (e) {}
-        }
+        // Sticky/баннерная реклама НЕ подключена: у PlatformAdapter нет проверенного
+        // баннерного метода площадок (VKWebAppShowBannerAd не изобретаем).
+        // Монетизация: rewarded (×2 забега, дейлик, возрождение, free-сундук) + interstitial в паузах.
     }
     setInterval(function () { if (tbVariants.length) { tbIndex++; showTb(); } }, 15000);
     document.addEventListener('click', function (e) {
@@ -2134,6 +2132,7 @@
     var bronyaNaArbuze = [];
     var oskolki = [];
     var udarnyeVolny = [], fonChasticy = [], bannerEffekt = null, impaktSkvish = 0, vozrozhdeniyaNaUrovne = 0;
+    var tickerOchered = []; // очередь retention-тикеров (не более 1 за вход в меню)
     var tryaskaEkrana = 0;
     var uroven = 1;
     var nozhiDlyaPobedy = 5;
@@ -2151,6 +2150,7 @@
     var bestLevel = 0;
     var tutorialDone = false;
     var kvesty = null, kombo = 0, runYabloki = 0, runMonetyLocal = 0, phantomUsed = false;
+    var runX2Given = false; // per-run флаг: ×2 за забег уже выдан через rewarded
     var zvezdy = {}, hardkor = false, achClaimed = {};
     var stat = { yabloki: 0, urovnei: 0, bossov: 0, perfect: 0, komboMax: 0, skinov: 1, zvezdy: 0, hardUrovnei: 0 };
     var ACH = [
@@ -2163,6 +2163,7 @@
         { id: 'a13', k: 'hardUrovnei', n: 10, r: 30 }
     ];
     var dailyLastDate = '';
+    var chestFreeDate = ''; // дата последнего бесплатного сундука (1/сутки)
     var dailyStreak = 0;
     var localLeaders = [];
     var playerName = '';
@@ -2239,6 +2240,46 @@
         });
     }
 
+    // Сколько монет не хватает до самого дешёвого ещё не открытого скина (крючок возврата B3)
+    function skolkoDoNovogoSkina() {
+        var min = Infinity;
+        for (var i = 0; i < vseSkins.length; i++) {
+            var s = vseSkins[i];
+            if (s.chestOnly || s.price <= 0) continue;
+            if (kuplyennyeSkins.indexOf(s.id) !== -1) continue;
+            if (s.price < min) min = s.price;
+        }
+        if (min === Infinity) return 0;
+        return Math.max(0, min - monety);
+    }
+
+    // Упаковка zvezdy: храним только ненулевые уровни (D2, экономия сейва)
+    function upakovatZvezdy() {
+        var out = {};
+        for (var k in zvezdy) { if (zvezdy[k] > 0) out[k] = zvezdy[k]; }
+        return out;
+    }
+
+    // Retention-тикеры (B1): очередь + показ через существующий bannerEffekt
+    function dobavitTicker(txt) {
+        if (!txt || tickerOchered.indexOf(txt) !== -1) return;
+        tickerOchered.push(txt);
+    }
+    function pokazatTickerIzOcheredi() {
+        if (bannerEffekt || !tickerOchered.length) return;
+        var txt = tickerOchered.shift();
+        bannerEffekt = { text: txt, cvet: '#ffd76a', text2: null, stars: null, t: 0, d: 3 };
+    }
+    function zaplanirovatTikeryMenu() {
+        if (typeof dailyDostupna === 'function' && dailyDostupna()) dobavitTicker(t('b_daily'));
+        var k = kvestySegodnya();
+        for (var i = 0; i < k.items.length; i++) {
+            var it = k.items[i];
+            if (it.p >= it.n && !it.claimed) { dobavitTicker(t('b_quests')); break; }
+        }
+        pokazatTickerIzOcheredi();
+    }
+
     function updateHUD() {
         if (sostoyanieIgry === 'PLAY' || sostoyanieIgry === 'GAMEOVER') {
             uiPanelLevel.classList.remove('skryto');
@@ -2247,9 +2288,46 @@
             uiTekstLevel.textContent = (eb ? t('boss') : t('level') + ' ') + uroven;
             uiTekstNozhei.textContent = t('knives') + ' ' + ostalosNozhei;
             var rs = document.getElementById('uiRunStats');
-            if (rs && sostoyanieIgry === 'GAMEOVER') rs.textContent = t('stats') + ': ' + runYabloki + ' 🪙';
+            if (rs && sostoyanieIgry === 'GAMEOVER') {
+                var doSkina = skolkoDoNovogoSkina();
+                rs.innerHTML = t('stats') + ': ' + runYabloki + ' 🪙 (' + runMonetyLocal + ')' +
+                    (doSkina > 0 ? '<br>' + t('toSkin') + ': ' + doSkina + ' 🪙' : '');
+            }
             var kv = document.getElementById('knopkaVoskresheniya');
-            if (kv && sostoyanieIgry === 'GAMEOVER') kv.style.display = hardkor ? 'none' : '';
+            if (kv && sostoyanieIgry === 'GAMEOVER') kv.style.display = (hardkor || vozrozhdeniyaNaUrovne >= 2) ? 'none' : '';
+            var krx2 = document.getElementById('knopkaRunX2');
+            if (!krx2 && kv && kv.parentNode) {
+                krx2 = document.createElement('button');
+                krx2.id = 'knopkaRunX2';
+                krx2.className = 'knopka knopkaReklama';
+                krx2.onclick = function () {
+                    if (runX2Given || sostoyanieIgry !== 'GAMEOVER') return;
+                    PlatformAdapter.showRewarded(
+                        pauseGameForAd,
+                        function () {
+                            if (runX2Given || sostoyanieIgry !== 'GAMEOVER') return;
+                            runX2Given = true;
+                            dobavitMonety(runMonetyLocal); // base уже начислен — это и есть ×2
+                            playSnd('win');
+                            var b2 = document.getElementById('knopkaRunX2');
+                            if (b2) b2.style.display = 'none';
+                            var rs2 = document.getElementById('uiRunStats');
+                            if (rs2) rs2.innerHTML = t('stats') + ': ' + runYabloki + ' 🪙 (' + (runMonetyLocal * 2) + ')';
+                        },
+                        resumeGameAfterAd,
+                        function () {
+                            resumeGameAfterAd();
+                            var b3 = document.getElementById('knopkaRunX2');
+                            if (b3 && !runX2Given) b3.style.display = 'none';
+                        }
+                    );
+                };
+                kv.parentNode.insertBefore(krx2, kv.nextSibling);
+            }
+            if (krx2) {
+                krx2.innerText = t('runX2');
+                krx2.style.display = (!hardkor && !runX2Given && runMonetyLocal > 0 && sostoyanieIgry === 'GAMEOVER') ? '' : 'none';
+            }
             uiTekstLevel.style.color = eb ? '#FF4444' : '#FFFFFF';
         } else {
             uiPanelLevel.classList.add('skryto');
@@ -2350,13 +2428,14 @@
             tutorialDone: tutorialDone,
             dailyLastDate: dailyLastDate,
             dailyStreak: dailyStreak,
-            leaders: localLeaders,
+            leaders: localLeaders.slice(0, 10).map(function (r) { return { s: r.s, d: r.d, n: String(r.n || '').slice(0, 12) }; }),
             playerName: playerName,
             kvesty: kvesty,
-            zvezdy: zvezdy,
+            zvezdy: upakovatZvezdy(),
             stat: stat,
             hardkor: hardkor,
-            achClaimed: achClaimed
+            achClaimed: achClaimed,
+            chestFreeDate: chestFreeDate
         });
     }
 
@@ -2380,9 +2459,11 @@
             if (data.stat) stat = data.stat;
             if (data.hardkor !== undefined) hardkor = data.hardkor;
             if (data.achClaimed) achClaimed = data.achClaimed;
+            if (data.chestFreeDate) chestFreeDate = data.chestFreeDate;
             updateUI();
             obnovitBestScore();
             obnovitDailyKnopku();
+            zaplanirovatTikeryMenu(); // B1: тикеры и при первом входе в меню после загрузки
         });
     }
 
@@ -2543,7 +2624,7 @@
             qdone: 'DONE',
             stats: 'This run',
             share: 'SHARE',
-            sharetext: 'Fruit Sniper: I reached level',
+            sharetext: 'PIRATE THROW: I reached level',
             copied: 'Copied!',
             rar_common: 'COMMON',
             rar_rare: 'RARE',
@@ -2633,6 +2714,10 @@
             b_chest: 'Chests hold mythic blades!',
             fx_tap: 'TAP FAST to pry it open sooner!',
             fx_again: 'OPEN AGAIN',
+            runX2: '×2 FOR VIDEO',
+            toSkin: 'To new skin',
+            freeChest: 'FREE CHEST',
+            freeDone: 'TAKEN TODAY',
             fx_coins: 'GOLD COINS',
             lb_hint: 'Finish a run — your best voyages will be logged here.',
             lb_you: 'You',
@@ -2668,7 +2753,7 @@
             qdone: 'ГОТОВО',
             stats: 'За забег',
             share: 'ПОДЕЛИТЬСЯ',
-            sharetext: 'Фруктовый Снайпер: я дошёл до уровня',
+            sharetext: 'PIRATE THROW: я дошёл до уровня',
             copied: 'Скопировано!',
             rar_common: 'ОБЫЧНЫЙ',
             rar_rare: 'РЕДКИЙ',
@@ -2758,6 +2843,10 @@
             b_chest: 'В сундуках — мифические клинки!',
             fx_tap: 'ТАПАЙ БЫСТРО — вскроешь раньше!',
             fx_again: 'ОТКРЫТЬ ЕЩЁ',
+            runX2: '×2 ЗА ВИДЕО',
+            toSkin: 'До нового скина',
+            freeChest: 'БЕСПЛАТНЫЙ СУНДУК',
+            freeDone: 'УЖЕ ВЗЯТО СЕГОДНЯ',
             fx_coins: 'ЗОЛОТЫЕ МОНЕТЫ',
             lb_hint: 'Пройди забег — лучшие результаты попадут в список.',
             lb_you: 'Вы',
@@ -2831,6 +2920,7 @@
                 '<span class="btn-icon">🎬</span>' +
                 '<span class="btn-text">' + t('continue') + '<br><small>' + t('forVideo') + '</small></span>';
         }
+        if (el('knopkaRunX2')) el('knopkaRunX2').innerText = t('runX2');
         obnovitKnopkuYazyka();
         obnovitBestScore();
         obnovitDailyKnopku();
@@ -3245,6 +3335,12 @@
     var knopkaShar = document.getElementById('knopkaShar');
     if (knopkaShar) knopkaShar.onclick = function () {
         var txt = t('sharetext') + ' ' + bestLevel + '! 🪙';
+        if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
+            try {
+                PlatformAdapter.vkBridge.send('VKWebAppShare', { text: txt }).catch(function () {});
+                return;
+            } catch (e) { /* падаем на navigator.share ниже */ }
+        }
         if (navigator.share) {
             navigator.share({ text: txt }).catch(function () {});
         } else if (navigator.clipboard) {
@@ -3273,7 +3369,8 @@
     // ЛИДЕРБОРД
     // =========================================================
     function dobavitRekord(score) {
-        if (score > bestLevel) {
+        var novyiRekord = score > bestLevel;
+        if (novyiRekord) {
             bestLevel = score;
             obnovitBestScore();
         }
@@ -3281,6 +3378,7 @@
         localLeaders.sort(function (a, b) { return b.s - a.s; });
         localLeaders = localLeaders.slice(0, 10);
         saveData();
+        if (novyiRekord) dobavitTicker(t('b_share')); // виральность: похвастаться в ближайшем меню
         PlatformAdapter.leaderSubmit(score);
     }
 
@@ -3349,7 +3447,12 @@
     if (knopkaProdolzit) knopkaProdolzit.onclick = zakrytPauzu;
     if (knopkaRestartPauza) knopkaRestartPauza.onclick = function () { zakrytPauzu(); zapuskUrovnya(uroven); };
     if (knopkaVMenyu) knopkaVMenyu.onclick = function () { zakrytPauzu(); vozvratVMenyu(); };
-    if (knopkaVMenyuGO) knopkaVMenyuGO.onclick = function () { vozvratVMenyu(); };
+    if (knopkaVMenyuGO) knopkaVMenyuGO.onclick = function () {
+        vozvratVMenyu();
+        // A4: единственная новая точка interstitial — естественная пауза после забега.
+        // Guard 120с/180с внутри showInterstitial не даст спама.
+        PlatformAdapter.showInterstitial(pauseGameForAd, resumeGameAfterAd, resumeGameAfterAd);
+    };
     if (knopkaZanovo) knopkaZanovo.onclick = function () { zapuskUrovnya(uroven); };
 
     function dobavitMonety(k) {
@@ -3395,6 +3498,22 @@
         if (monety < res.cost) return;
         dobavitMonety(-res.cost);
         fxStart(n, res);
+    };
+    // A2: один бесплатный сундук ЛЮБОГО тира в сутки — за rewarded-видео.
+    window._game.chestFree = function (n) {
+        var today = segodnyaData();
+        if (chestFreeDate === today) return;
+        PlatformAdapter.showRewarded(
+            pauseGameForAd,
+            function () {
+                if (chestFreeDate === today) return;
+                chestFreeDate = today;
+                saveData();
+                fxStart(n, chestRoll(n)); // лут начисляется сразу внутри fxStart
+            },
+            resumeGameAfterAd,
+            resumeGameAfterAd
+        );
     };
     window._game.achZabrat = function (id) {
         for (var i = 0; i < ACH.length; i++) {
@@ -3520,6 +3639,24 @@
             var b = document.getElementById('chestBtn' + c[0]);
             if (b) { b.disabled = monety < c[1]; b.innerHTML = c[1] + ' ' + coinIco(); }
         });
+        // A2: ленивые кнопки «🎬 FREE» под каждым платным сундуком (1 бесплатный в сутки)
+        var freeDone = chestFreeDate === segodnyaData();
+        for (var ci = 1; ci <= 3; ci++) {
+            var payBtn = document.getElementById('chestBtn' + ci);
+            if (!payBtn || !payBtn.parentNode) continue;
+            var fr = document.getElementById('chestFreeBtn' + ci);
+            if (!fr) {
+                fr = document.createElement('button');
+                fr.id = 'chestFreeBtn' + ci;
+                fr.className = 'knopka knopkaReklama chestFreeBtn';
+                fr.setAttribute('data-n', String(ci));
+                fr.onclick = function () { window._game.chestFree(parseInt(this.getAttribute('data-n'), 10) || 1); };
+                payBtn.parentNode.insertBefore(fr, payBtn.nextSibling);
+            }
+            fr.innerText = freeDone ? t('freeDone') : '🎬 ' + t('freeChest');
+            fr.disabled = freeDone;
+            fr.style.opacity = freeDone ? 0.45 : 1;
+        }
         var chestNames = [['ui_chest1', 'chest_wood'], ['ui_chest2', 'chest_silver'], ['ui_chest3', 'chest_gold'],
                           ['ui_chestd1', 'chest_d1'], ['ui_chestd2', 'chest_d2'], ['ui_chestd3', 'chest_d3']];
         chestNames.forEach(function (p) {
@@ -3568,6 +3705,7 @@
         padayushiyNozh = null;
         obnovitDailyKnopku();
         updateHUD();
+        zaplanirovatTikeryMenu(); // B1: не более 1 тикера за вход в меню
     }
 
     // =========================================================
@@ -3651,6 +3789,7 @@
         vozrozhdeniyaNaUrovne = 0; bannerEffekt = null; udarnyeVolny = [];
         phantomUsed = false;
         runYabloki = 0; runMonetyLocal = 0; kombo = 0;
+        runX2Given = false;
         uroven = 1;
         nozhiDlyaPobedy = 5;
         ostalosNozhei = 5;
@@ -3742,6 +3881,7 @@
         phantomUsed = false;
         if (vozrozhdeniyaNaUrovne === 0) dobavitMonety(2);
         vozrozhdeniyaNaUrovne = 0;
+        runX2Given = false; // новый уровень — флаг ×2 сброжен
         var clearedLvl = uroven - 1;
         var st = 1 + (vozrozhdeniyaNaUrovne === 0 ? 1 : 0) + (yablokiNaArbuze.length === 0 ? 1 : 0);
         var prevSt = zvezdy[clearedLvl] || 0;
@@ -4403,6 +4543,18 @@
         } else {
             FX.el.equip.style.display = 'none';
         }
+        // C1: после легендарного/мифического скина — ненавязчивая кнопка «похвастаться» (ведёт на knopkaShar.onclick)
+        var brag = document.getElementById('fxBrag');
+        if (!brag) {
+            brag = document.createElement('button');
+            brag.id = 'fxBrag';
+            brag.className = 'knopka knopkaSharCvet';
+            brag.onclick = function () { var ks = document.getElementById('knopkaShar'); if (ks && ks.onclick) ks.onclick(); };
+            btns.appendChild(brag);
+        }
+        var showBrag = !!(res && res.type === 'skin' && (FX.rar === 'legendary' || FX.rar === 'mythic'));
+        brag.style.display = showBrag ? '' : 'none';
+        if (showBrag) brag.innerText = '📤 ' + t('b_share');
         btns.style.opacity = 1;
         btns.style.pointerEvents = 'auto';
     }
