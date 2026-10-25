@@ -1519,11 +1519,12 @@
                     setTimeout(function () {
                         if (self.vkBridge && self.vkBridge.subscribe) {
                             self.vkBridge.subscribe(function (event) {
+                                // Сворачивание приложения на мобильном: полностью глушим звук и геймплей.
                                 if (event.detail && event.detail.type === 'VKWebAppViewHide') {
-                                    pauseGameForAd();
+                                    svernutieIgryHide();
                                 }
                                 if (event.detail && event.detail.type === 'VKWebAppViewRestore') {
-                                    resumeGameAfterAd();
+                                    svernutieIgryShow();
                                 }
                             });
                         }
@@ -2206,8 +2207,31 @@
             if (bgp && !isMuted && currentVolume > 0) bgp.play().catch(function () {});
         }
     }
+
+    // Сворачивание приложения (VKWebAppViewHide / скрытие вкладки):
+    // ПОЛНАЯ остановка звука — музыка, SFX и геймплей. Раньше музыка продолжала играть в фоне.
+    function svernutieIgryHide() {
+        try {
+            var bgm = document.getElementById('bgMusic');
+            if (bgm) bgm.pause();
+        } catch (e) {}
+        try { if (audioContext && audioContext.state === 'running') audioContext.suspend(); } catch (e) {}
+        if (sostoyanieIgry === 'PLAY' && !pauzaAktivna) otkrytPauzu();
+    }
+    // Возврат в игру (VKWebAppViewRestore / показ вкладки): звук возвращается с учётом mute и паузы.
+    function svernutieIgryShow() {
+        try {
+            if (audioContext && audioContext.state === 'suspended') audioContext.resume().catch(function () {});
+        } catch (e) {}
+        var v = isMuted ? 0 : currentVolume;
+        try {
+            var bgm = document.getElementById('bgMusic');
+            if (bgm && v > 0 && !pauzaAktivna) bgm.play().catch(function () {});
+        } catch (e) {}
+    }
     document.addEventListener('visibilitychange', function () {
-        if (document.hidden && sostoyanieIgry === 'PLAY' && !pauzaAktivna) otkrytPauzu();
+        if (document.hidden) svernutieIgryHide();
+        else svernutieIgryShow();
     });
     window.addEventListener('blur', function () {
         if (sostoyanieIgry === 'PLAY' && !pauzaAktivna) otkrytPauzu();
@@ -2454,6 +2478,7 @@
             if (data.leaders) localLeaders = data.leaders;
             if (typeof data.playerName === 'string' && data.playerName) playerName = data.playerName;
             localLeaders = localLeaders.map(function (r) { return typeof r === 'number' ? { s: r, d: 0, n: '' } : r; });
+            localLeaders = dedupLeaders(localLeaders); // чистим уже сохранённые дубли из старых сейвов
             if (data.kvesty) kvesty = data.kvesty;
             if (data.zvezdy) zvezdy = data.zvezdy;
             if (data.stat) stat = data.stat;
@@ -3368,6 +3393,28 @@
     // =========================================================
     // ЛИДЕРБОРД
     // =========================================================
+    // Рейтинг без дублей: одна строка на игрока (лучший счёт, свежая дата).
+    function dedupLeaders(arr) {
+        var out = [];
+        for (var i = 0; i < arr.length; i++) {
+            var r = arr[i] || { s: 0, d: 0, n: '' };
+            var key = String(r.n || '').toLowerCase();
+            var ex = null;
+            for (var j = 0; j < out.length; j++) {
+                if (String(out[j].n || '').toLowerCase() === key) { ex = out[j]; break; }
+            }
+            if (!ex) {
+                out.push({ s: r.s, d: r.d, n: String(r.n || '').slice(0, 12) });
+            } else if (r.s > ex.s) {
+                ex.s = r.s; ex.d = r.d;
+            } else if (r.s === ex.s && r.d > ex.d) {
+                ex.d = r.d;
+            }
+        }
+        out.sort(function (a, b) { return b.s - a.s; });
+        return out.slice(0, 10);
+    }
+
     function dobavitRekord(score) {
         var novyiRekord = score > bestLevel;
         if (novyiRekord) {
@@ -3375,8 +3422,7 @@
             obnovitBestScore();
         }
         localLeaders.push({ s: score, d: Date.now(), n: playerName });
-        localLeaders.sort(function (a, b) { return b.s - a.s; });
-        localLeaders = localLeaders.slice(0, 10);
+        localLeaders = dedupLeaders(localLeaders); // аккаунт больше не дублируется в топе
         saveData();
         if (novyiRekord) dobavitTicker(t('b_share')); // виральность: похвастаться в ближайшем меню
         PlatformAdapter.leaderSubmit(score);
@@ -3398,7 +3444,7 @@
                 var dstr = r.d ? new Date(r.d).toLocaleDateString() : '';
                 html += '<div class="lbRow' + (i === 0 ? ' lbTop1' : '') + '" style="animation-delay:' + (i * 70) + 'ms">' +
                     '<span class="lbRank">' + rank + '</span>' +
-                    '<span class="lbName">' + esc(r.n || t('lb_you')) + '</span>' +
+                    '<span class="lbName">' + esc(r.n || t('lb_you')) + (r.n && r.n === playerName ? ' · ' + t('lb_you') : '') + '</span>' +
                     '<span class="lbVal">' + r.s + '</span>' +
                     (dstr ? '<span class="lbDate">' + dstr + '</span>' : '') +
                     '</div>';
