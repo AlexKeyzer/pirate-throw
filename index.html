@@ -830,6 +830,29 @@
         .kartochkaSkina:hover { transform: translateY(-3px); }
         .kvestRow { border-radius: 14px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.10); }
         .setka { gap: 10px; }
+        /* Фикс модерации 1: заголовок и кнопка «назад» закреплены, скроллится только контент */
+        #ekranMagazina, #ekranKvestov, #ekranAch, #ekranKarty, #ekranLeader { overflow-y: hidden; }
+        .ekranScroller {
+            overflow-y: auto; flex: 1 1 auto; min-height: 0;
+            display: flex; flex-direction: column; gap: 12px; width: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+        #ekranMagazina > h2, #ekranKvestov > h2, #ekranAch > h2, #ekranKarty > h2, #ekranLeader > h2,
+        #ekranMagazina > button:last-child, #ekranKvestov > button:last-child,
+        #ekranAch > button:last-child, #ekranKarty > button:last-child, #ekranLeader > button:last-child {
+            flex: 0 0 auto;
+        }
+        /* Фикс модерации 2: тексты кнопок главного меню помещаются целиком */
+        .ekran.main-menu .menu-row .knopka {
+            font-size: 12px;
+            letter-spacing: .5px;
+            line-height: 1.15;
+            padding: 10px 6px;
+            border-radius: 22px;
+            word-break: normal;
+            overflow-wrap: break-word;
+            hyphens: none;
+        }
         .best-score { letter-spacing: 1.5px; }
         * { scrollbar-width: none; -ms-overflow-style: none; }
         html, body, button, canvas { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -926,7 +949,6 @@
             100% { opacity: 1; transform: translateY(0); }
         }
         .chestRow { display: flex; gap: 8px; width: 100%; margin-bottom: 4px; }
-        .chestFreeBtn { margin-top: 4px; font-size: 11px; min-height: 30px; padding: 4px 6px; letter-spacing: 0; }
         .chestCard { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
             background: linear-gradient(170deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
             border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 8px 6px; }
@@ -936,6 +958,14 @@
         .chestName { font-family: 'RussoOne', sans-serif; font-size: 9px; color: #ffd76a; letter-spacing: .5px; text-align: center; }
         .chestDesc { font-size: 12px; color: #bbb; text-align: center; line-height: 1.3; }
         .chestBtn { font-size: 12px; padding: 8px 10px; min-height: 44px; }
+        /* Фикс модерации: магазин без горизонтального переполнения */
+        .ekranScroller { overflow-x: hidden; }
+        .chestCard { min-width: 0; }
+        .chestDesc { font-size: 10px; }
+        .chestFreeBtn {
+            margin-top: 4px; font-size: 10px; min-height: 34px; padding: 4px 4px;
+            letter-spacing: 0; line-height: 1.1; white-space: normal;
+        }
         .rl-mythic { background: linear-gradient(90deg, #d50000, #6a1b9a); color: #ffd7d7; }
         .skincard.redk-mythic { border-color: #ff5252; box-shadow: 0 0 18px rgba(255,60,120,.5); }
         .kartochkaSkina.redk-mythic { border: 1px solid #ff5252; box-shadow: 0 0 18px rgba(255,60,120,.5); }
@@ -2247,6 +2277,27 @@
     // =========================================================
     // МАСШТАБИРОВАНИЕ / РЕСАЙЗ
     // =========================================================
+    // Фикс модерации: в длинных экранах скроллится только контент —
+    // заголовок (h2) и кнопка «назад» остаются закреплёнными.
+    function obertonSkrollera() {
+        var ids = ['ekranMagazina', 'ekranKvestov', 'ekranAch', 'ekranKarty', 'ekranLeader'];
+        for (var i = 0; i < ids.length; i++) {
+            var e = document.getElementById(ids[i]);
+            if (!e || e.getAttribute('data-scrolled') === '1') continue;
+            var kids = [];
+            for (var k = 0; k < e.children.length; k++) kids.push(e.children[k]);
+            if (kids.length < 3) continue;
+            var head = kids[0], foot = kids[kids.length - 1];
+            if ((head.tagName !== 'H2' && head.tagName !== 'H1') || foot.tagName !== 'BUTTON') continue;
+            var sc = document.createElement('div');
+            sc.className = 'ekranScroller';
+            for (var j = 1; j < kids.length - 1; j++) sc.appendChild(kids[j]);
+            e.insertBefore(sc, foot);
+            e.setAttribute('data-scrolled', '1');
+        }
+    }
+    obertonSkrollera();
+
     function scaleMenus() {
         var container = document.getElementById('gameContainer');
         var width = container ? container.clientWidth : window.innerWidth;
