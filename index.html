@@ -1,19 +1,22 @@
 
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="PIRATE THROW — бросай ножи в цель, открывай сундуки, собирай скины. Бесплатная HTML5-игра для VK Games.">
+    <meta property="og:locale" content="ru_RU">
+    <meta property="og:description" content="PIRATE THROW — бросай ножи в цель, открывай сундуки, собирай скины.">
     <title>PIRATE THROW</title>
     <meta property="og:title" content="PIRATE THROW">
     <meta name="vk-game-title" content="PIRATE THROW">
+    <!-- VK Bridge: официальный SDK VK Games. Загружается синхронно в <head> до игры (требование VK). -->
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
-    <!-- GamePush SDK (грузится неблокирующе, только если мы на их площадке) -->
-    <script type="text/javascript">
-        window.__gpInjected = false;
-    </script>
+    <!-- VK Games: только нативная реклама VK (VKWebAppShowNativeAds). Сторонние рекламные сети запрещены правилами VK. -->
 
     <style>
         *,
@@ -40,10 +43,14 @@
             background: #1a1a1a;
             touch-action: none;
             -ms-touch-action: none;
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
+            overscroll-behavior: none;
+        }
+        /* Safe-area (чёлка iPhone) применяем один раз — на обёртку, а не на html+body одновременно */
+        .game-wrapper {
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
         }
 
         body::before {
@@ -90,13 +97,8 @@
             z-index: 1;
         }
 
-        @media (min-aspect-ratio: 9/16) {
-            .game-container {
-                max-width: 100vw;
-                height: 177.78vw;
-                max-height: 100vh;
-            }
-        }
+        /* Размер контейнера задаёт JS (nastroikaEkrana) в px под реальный iframe VK.
+           CSS-переопределения height:177vw убраны — они конфликтовали с JS и ломали вёрстку на широких экранах. */
 
         #igrovoePole {
             width: 100%;
@@ -308,7 +310,7 @@
 
         .game-hud {
             position: absolute;
-            top: 10px;
+            top: 58px; /* ниже верхней панели (звук/монеты/пауза) — раньше HUD накладывался на них */
             font-family: Arial, sans-serif;
             font-weight: bold;
             font-size: 24px;
@@ -855,7 +857,9 @@
         }
         .best-score { letter-spacing: 1.5px; }
         * { scrollbar-width: none; -ms-overflow-style: none; }
-        html, body, button, canvas { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        html, body { touch-action: none; -webkit-tap-highlight-color: transparent; }
+        button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        canvas { touch-action: none; }
         html { overscroll-behavior: none; position: fixed; inset: 0; width: 100%; height: 100%; }
         body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
@@ -913,17 +917,15 @@
         #tbBtn { font-size: 11px; padding: 6px 10px; min-height: 32px; }
         #tbClose { background: none; border: none; color: rgba(255,255,255,.55); font-size: 15px; cursor: pointer; padding: 4px; }
         body.bannerOn .game-hud, body.bannerOn #knopkaPauza, body.bannerOn #panelMonet { top: 52px; }
-        #veilBlur { display: none !important; position: absolute; inset: 0; background: rgba(8, 5, 3, 0);
+        #veilBlur { position: absolute; inset: 0; background: rgba(8, 5, 3, 0);
             opacity: 0; transition: opacity .25s ease; pointer-events: none; z-index: 150; }
         #veilBlur.pokazan { opacity: 1; }
         #igrovoePole { transition: filter .25s ease; }
         #igrovoePole.zabliur { filter: none; }
+        /* Скрытие попапов: display:none (как у всех .skryto). Старый display:block+visibility:hidden
+           оставлял «призраки» в DOM и ломал анимации/скриншоты модерации. */
         .popup-overlay.skryto {
-            display: block !important;
-            visibility: hidden;
-            pointer-events: none;
-            animation: popOut .18s ease both;
-            transition: visibility 0s linear .18s;
+            display: none !important;
         }
         @keyframes popOut {
             0% { transform: translate(-50%, -50%) scale(var(--ms, 1)); opacity: 1; }
@@ -1035,6 +1037,46 @@
             .ekran, .popup-overlay { border-radius: 22px; }
             .knopka { letter-spacing: 1px; }
         }
+    
+        /* ===== VK FIX: новые кнопки/экраны, компактное меню, бесплатный сундук ===== */
+        .menu-row-small { gap: 6px; }
+        .knopkaSmall { font-size: 11px; padding: 8px 6px; min-height: 44px; letter-spacing: .5px; }
+        .knopkaFreeChest {
+            background: linear-gradient(180deg, #ff5c8a, #d81b60);
+            box-shadow: 0 6px 18px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.35);
+            min-height: 48px; font-size: 15px;
+        }
+        .helpText { text-align: left; font-size: 13px; line-height: 1.6; color: #eee; white-space: pre-wrap; }
+        .helpText b { color: #FFD700; }
+        /* Компактное главное меню на коротких экранах (ландшафт, низкие окна) — все кнопки видны без скролла */
+        @media (max-height: 720px) {
+            .ekran.main-menu { padding: 12px; gap: 8px; }
+            .game-logo { width: min(80%, 240px); margin-bottom: 2px; }
+            .ekran.main-menu .knopka { padding: 9px 12px; font-size: 13px; min-height: 40px; }
+            .best-score { font-size: 12px; }
+        }
+        @media (max-height: 560px) {
+            .ekran.main-menu { padding: 10px; gap: 6px; }
+            .game-logo { width: min(60%, 180px); }
+            .ekran.main-menu .knopka { padding: 7px 10px; font-size: 12px; min-height: 38px; }
+            #logoTextFallback { font-size: 22px; }
+        }
+        /* Кнопки-иконки не меньше 44px (требование VK к сенсорным целям) */
+        #panelPauza { width: 44px; height: 44px; margin-left: -22px; }
+        .knopkaZvukaOformlenie, .knopkaYazykaOformlenie { min-width: 44px; min-height: 44px; }
+        .chestFreeBtn { min-height: 44px; font-size: 12px; }
+        /* Баннер VK внизу в меню не должен закрывать кнопки */
+        body.bannerOn .ekran.main-menu { padding-bottom: 64px; }
+        /* Фолбэк, если bg.jpg отсутствует: градиент вместо чёрного провала */
+        body::before, .game-wrapper, .game-container {
+            background-color: #2a1a0e;
+        }
+        /* Заголовки с background-clip: fallback-цвет для браузеров без поддержки */
+        .ekran h1, .ekran h2, .popup-overlay h1, .popup-overlay h2 { color: #FFD700; }
+        @supports ((-webkit-background-clip: text) or (background-clip: text)) {
+            .ekran h1, .ekran h2, .popup-overlay h1, .popup-overlay h2 { color: transparent; }
+        }
+
     </style>
 </head>
 <body>
@@ -1080,7 +1122,8 @@
                 </div>
 
                 <div id="glavnoeMenu" class="ekran main-menu popup-scale-target">
-                    <img id="logoIgra" class="game-logo" src="logo_ru.png" alt="PIRATE THROW">
+                    <img id="logoIgra" class="game-logo" src="logo_ru.png" alt="PIRATE THROW" onerror="this.style.display='none';var f=document.getElementById('logoTextFallback');if(f)f.style.display='block';">
+                    <div id="logoTextFallback" style="display:none;font-size:30px;font-weight:900;letter-spacing:3px;color:#FFD700;text-shadow:2px 2px 0 #000;margin-bottom:6px;">PIRATE THROW</div>
                     <p class="best-score" id="ui_bestScore">BEST: 0</p>
                     <button id="knopkaIgrat" class="knopka">PLAY</button>
                     <button id="knopkaMagazin" class="knopka knopkaMagazinaCvet">SKINS SHOP</button>
@@ -1094,6 +1137,11 @@
                         <button id="knopkaAch" class="knopka knopkaAchCvet">AWARDS</button>
                     </div>
                     <button id="knopkaHard" class="knopka serya hardChip">HARDCORE: OFF</button>
+                    <div class="menu-row menu-row-small">
+                        <button id="knopkaHelp" class="knopka knopkaSmall">?</button>
+                        <button id="knopkaPrivacy" class="knopka knopkaSmall">PRIVACY</button>
+                        <button id="knopkaSupport" class="knopka knopkaSmall">SUPPORT</button>
+                    </div>
                     <div class="verTag">PIRATE THROW v1.3</div>
                 </div>
 
@@ -1178,6 +1226,24 @@
                     <button id="ui_claim" class="knopka" onclick="window._game.zakrytPopup()">CLAIM</button>
                 </div>
 
+                <div id="ekranHelp" class="ekran popup-overlay popup-scale-target skryto">
+                    <h2 id="ui_helpTitle">HOW TO PLAY</h2>
+                    <div class="scrollBox helpText" id="ui_helpText"></div>
+                    <button id="knopkaZakrytHelp" class="knopka serya">BACK</button>
+                </div>
+
+                <div id="ekranPrivacy" class="ekran popup-overlay popup-scale-target skryto">
+                    <h2 id="ui_privTitle">PRIVACY</h2>
+                    <div class="scrollBox helpText" id="ui_privText"></div>
+                    <button id="knopkaZakrytPrivacy" class="knopka serya">BACK</button>
+                </div>
+
+                <div id="ekranSupport" class="ekran popup-overlay popup-scale-target skryto">
+                    <h2 id="ui_supTitle">SUPPORT</h2>
+                    <div class="scrollBox helpText" id="ui_supText"></div>
+                    <button id="knopkaZakrytSupport" class="knopka serya">BACK</button>
+                </div>
+
                 <div id="ekranProigrysha" class="ekran popup-overlay popup-scale-target skryto">
                     <h1 id="ui_gameover" class="krasnyiTekst" style="font-size: 22px;">GAME OVER!</h1>
                     <p><span id="ui_lvl_text">Level:</span> <span id="tekushiyUrovenUI">1</span></p>
@@ -1202,21 +1268,15 @@
     // ОПРЕДЕЛЕНИЕ ОКРУЖЕНИЯ
     // =========================================================
     function isInsideVk() {
+        // VK FIX: определяем VK не только по URL/referrer (в webview referrer часто пустой),
+        // но и по наличию vkBridge + запуску в iframe. Итоговый platform решает успешный VKWebAppInit.
         try {
+            if (typeof vkBridge !== 'undefined' && vkBridge) return true;
             var params = new URLSearchParams(window.location.search);
-            if (params.has('vk_app_id')) {
-                return true;
-            }
-            if (params.has('vk_user_id')) {
-                return true;
-            }
+            if (params.has('vk_app_id') || params.has('vk_user_id') || params.has('vk_aref')) return true;
             var ref = document.referrer || '';
-            if (ref.indexOf('vk.com') !== -1) {
-                return true;
-            }
-            if (ref.indexOf('vk.ru') !== -1) {
-                return true;
-            }
+            if (ref.indexOf('vk.com') !== -1 || ref.indexOf('vk.ru') !== -1) return true;
+            try { if (window.self !== window.top) return true; } catch (e2) { return true; }
             return false;
         } catch (e) {
             return false;
@@ -1258,119 +1318,45 @@
     }
 
     window.addEventListener('pagehide', function () {
-        if (PlatformAdapter.platform === 'gamepush' && PlatformAdapter.sdk) {
-            var gp = PlatformAdapter.sdk;
-            try {
-                if (typeof gp.gameStop === 'function') { gp.gameStop(); gpDebug('gameStop'); }
-            } catch (e) {}
-        }
+        // VK FIX: при уходе сохраняем прогресс (VK Storage + localStorage)
+        try { saveData(); } catch (e) {}
     });
 
     var gpEventsHooked = false;
-    function hookGpEvents() {
-        if (gpEventsHooked || PlatformAdapter.platform !== 'gamepush' || !PlatformAdapter.sdk) return;
-        var gp = PlatformAdapter.sdk;
-        gpEventsHooked = true;
-        try {
-            if (gp.on) {
-                gp.on('pause', function () {
-                    gpGameplay(false);
-                    var bgm = document.getElementById('bgMusic');
-                    if (bgm) bgm.pause();
-                    if (sostoyanieIgry === 'PLAY' && !pauzaAktivna) otkrytPauzu();
-                });
-                gp.on('resume', function () {});
-            }
-            if (gp.sounds && gp.sounds.on) {
-                gp.sounds.on('mute', function () { isMuted = true; updateVolumeUI(); });
-                gp.sounds.on('unmute', function () { isMuted = false; updateVolumeUI(); });
-            }
-        } catch (e) {}
-    }
+    function hookGpEvents() { /* VK FIX: GamePush удалён */ }
     function gpDebug(msg) {
         try {
             if (window.location.search.indexOf('gpdebug') !== -1) console.log('[GP] ' + msg);
         } catch (e) {}
     }
-    function gpGameplay(start) {
-        if (PlatformAdapter.platform !== 'gamepush' || !PlatformAdapter.sdk) return;
-        var gp = PlatformAdapter.sdk;
-        try {
-            if (start) {
-                if (typeof gp.gameplayStart === 'function') gp.gameplayStart();
-                else if (gp.gameplay && typeof gp.gameplay.start === 'function') gp.gameplay.start();
-                gpDebug('gameplayStart');
-            } else {
-                if (typeof gp.gameplayStop === 'function') gp.gameplayStop();
-                else if (gp.gameplay && typeof gp.gameplay.stop === 'function') gp.gameplay.stop();
-                gpDebug('gameplayStop');
-            }
-        } catch (e) {}
-    }
+    function gpGameplay(start) { /* VK FIX: GamePush удалён */ }
     var gpPrevState = 'MENU';
 
-    function gpStateWatch() {
-        if (sostoyanieIgry !== gpPrevState) {
-            gpGameplay(sostoyanieIgry === 'PLAY');
-            gpPrevState = sostoyanieIgry;
-        }
-        if (!gpEventsHooked && PlatformAdapter.platform === 'gamepush') hookGpEvents();
-    }
+    function gpStateWatch() { /* VK FIX: GamePush удалён */ }
 
     function detectGamePush() {
-        if (typeof window.GamePush !== 'undefined' && window.GamePush) {
-            return window.GamePush;
-        }
-        if (typeof window.GP !== 'undefined' && window.GP) {
-            return window.GP;
-        }
+        // VK FIX: GamePush удалён — в VK Games разрешена только нативная реклама VK.
         return null;
     }
 
     function loadVkBridge(callback) {
-        if (!isInsideVk()) {
-            callback(false);
+        // VK FIX: vk-bridge подключён синхронно в <head> (официальный CDN).
+        // Здесь только проверяем доступность — без повторной загрузки и без гейта по URL.
+        if (typeof vkBridge !== 'undefined' && vkBridge) {
+            callback(true);
             return;
         }
-        var urls = [
-            'https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js',
-            'https://cdn.jsdelivr.net/npm/@vkontakte/vk-bridge/dist/browser.min.js'
-        ];
-        var idx = 0;
+        // Запасной вариант: если CDN в <head> не загрузился (сеть), пробуем второй CDN один раз.
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/@vkontakte/vk-bridge/dist/browser.min.js';
+        s.async = true;
         var done = false;
-        function tryNext() {
-            if (done) {
-                return;
-            }
-            if (idx >= urls.length) {
-                done = true;
-                callback(false);
-                return;
-            }
-            var s = document.createElement('script');
-            s.src = urls[idx];
-            s.async = true;
-            var to = setTimeout(function () {
-                s.onload = null;
-                s.onerror = null;
-                idx++;
-                tryNext();
-            }, 4000);
-            s.onload = function () {
-                clearTimeout(to);
-                if (!done) {
-                    done = true;
-                    callback(true);
-                }
-            };
-            s.onerror = function () {
-                clearTimeout(to);
-                idx++;
-                tryNext();
-            };
-            document.head.appendChild(s);
-        }
-        tryNext();
+        var to = setTimeout(function () {
+            if (!done) { done = true; callback(false); }
+        }, 4000);
+        s.onload = function () { if (!done) { done = true; clearTimeout(to); callback(true); } };
+        s.onerror = function () { if (!done) { done = true; clearTimeout(to); callback(false); } };
+        document.head.appendChild(s);
     }
 
     function adLog(msg) {
@@ -1395,7 +1381,7 @@
 
         g.fillStyle = cfg.handle;
         g.beginPath();
-        g.roundRect(26, 120, 12, 62, 5);
+        if (g.roundRect) { g.roundRect(26, 120, 12, 62, 5); } else { g.rect(26, 120, 12, 62); }
         g.fill();
 
         g.fillStyle = cfg.guard;
@@ -1516,18 +1502,8 @@
         init: function () {
             var self = this;
             return new Promise(function (resolve) {
-                var gp = detectGamePush();
-                if (gp) {
-                    self.platform = 'gamepush';
-                    self.sdk = gp;
-                    adLog('GamePush detected');
-                    self._gpSignalReady();
-                    hookGpEvents();
-                    resolve();
-                    return;
-                }
-
-                if (isInsideVk() && typeof vkBridge !== 'undefined' && vkBridge) {
+                // VK FIX: только VK Bridge или web. GamePush удалён.
+                if (typeof vkBridge !== 'undefined' && vkBridge) {
                     vkBridge.send('VKWebAppInit').then(function () {
                         self.platform = 'vk';
                         self.vkBridge = vkBridge;
@@ -1539,11 +1515,11 @@
                             if (user.first_name) playerName = String(user.first_name);
                         }
                     }).catch(function (e) {
-                        adLog('VK init warning: ' + e);
-                        if (self.platform !== 'vk') {
-                            self.platform = 'vk';
-                            self.vkBridge = vkBridge;
-                        }
+                        // VK FIX: если VKWebAppInit упал — НЕ подделываем platform=vk.
+                        // Иначе реклама будет «выдавать награду без просмотра». Остаёмся в web.
+                        adLog('VK init failed, fallback to web: ' + e);
+                        self.platform = 'web';
+                        self.vkBridge = null;
                     });
 
                     setTimeout(function () {
@@ -1569,32 +1545,9 @@
             });
         },
 
-        _gpSignalReady: function () {
-            var gp = this.sdk;
-            if (!gp) {
-                return;
-            }
-            try {
-                if (gp.games && typeof gp.games.ready === 'function') {
-                    gp.games.ready();
-                }
-                if (typeof gp.gameStart === 'function') {
-                    gp.gameStart();
-                } else if (typeof gp.ready === 'function') {
-                    gp.ready();
-                } else if (typeof gp.start === 'function') {
-                    gp.start();
-                }
-            } catch (e) {
-                adLog('GP ready warn: ' + e);
-            }
-        },
+        _gpSignalReady: function () { /* VK FIX: GamePush удалён */ },
 
         signalReady: function () {
-            if (this.platform === 'gamepush') {
-                this._gpSignalReady();
-                return;
-            }
             if (this.platform === 'vk' && this.vkBridge) {
                 try {
                     this.vkBridge.send('VKWebAppSetViewSettings', {
@@ -1605,86 +1558,40 @@
             }
         },
 
-        _gpCall: function (names, args) {
-            var gp = this.sdk;
-            if (!gp) {
-                return null;
-            }
-            for (var i = 0; i < names.length; i++) {
-                var path = names[i].split('.');
-                var obj = gp;
-                var ok = true;
-                for (var j = 0; j < path.length - 1; j++) {
-                    if (!obj[path[j]]) {
-                        ok = false;
-                        break;
-                    }
-                    obj = obj[path[j]];
-                }
-                var fnName = path[path.length - 1];
-                if (ok && obj && typeof obj[fnName] === 'function') {
-                    try {
-                        return obj[fnName].apply(obj, args || []);
-                    } catch (e) {
-                        return null;
-                    }
-                }
-            }
-            return null;
-        },
+        _gpCall: function (names, args) { return null; }, // VK FIX: GamePush удалён
 
         showPreroll: function (onDone) {
+            // VK FIX: прероллер VK (ad_format: preloader) — только один раз за сессию и только
+            // если реклама реально доступна. Никогда не блокирует старт игры.
             var self = this;
-            if (this.platform === 'gamepush') {
-                try {
-                    if (sessionStorage.getItem('gp_pre_shown')) { if (onDone) onDone(); return; }
-                    sessionStorage.setItem('gp_pre_shown', '1');
-                } catch (e) {}
-                var r = this._gpCall([
-                    'ads.showPreloader',
-                    'showPreloader',
-                    'ads.showPreload',
-                    'showPreload',
-                    'ads.preload',
-                    'preload'
-                ], []);
-                if (r && typeof r.then === 'function') {
-                    r.then(function () { if (onDone) onDone(); }).catch(function () { if (onDone) onDone(); });
-                } else {
-                    if (onDone) onDone();
-                }
-                adLog('GamePush preroll requested');
+            try {
+                if (sessionStorage.getItem('vk_pre_shown')) { if (onDone) onDone(); return; }
+                sessionStorage.setItem('vk_pre_shown', '1');
+            } catch (e) {}
+            if (this.platform === 'vk' && this.vkBridge) {
+                this.vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'preloader' })
+                    .then(function (chk) {
+                        if (chk && chk.result) {
+                            return self.vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'preloader' });
+                        }
+                        return null;
+                    })
+                    .then(function () { if (onDone) onDone(); })
+                    .catch(function () { if (onDone) onDone(); });
                 return;
             }
-            if (onDone) {
-                onDone();
-            }
+            if (onDone) onDone();
         },
 
         showInterstitial: function (onOpen, onClose, onError) {
             var self = this;
             var now = Date.now();
-            var allowed = (now - this.sessionStartTime >= 120000) &&
-                (now - this.lastInterstitialTime >= 180000);
+            // VK FIX: частота 60с от старта сессии / 90с между показами.
+            // Правило VK: не чаще раза в 30с и не при запуске. Старые 120/180с душили доход без пользы.
+            var allowed = (now - this.sessionStartTime >= 60000) &&
+                (now - this.lastInterstitialTime >= 90000);
             if (!allowed) {
                 if (onClose) onClose();
-                return;
-            }
-
-            if (this.platform === 'gamepush') {
-                if (onOpen) onOpen();
-                var r = this._gpCall([
-                    'ads.showInterstitial',
-                    'showInterstitial',
-                    'ads.show',
-                    'showAd'
-                ], []);
-                this.lastInterstitialTime = now;
-                if (r && typeof r.then === 'function') {
-                    r.then(function () { if (onClose) onClose(); }).catch(function () { if (onClose) onClose(); });
-                } else {
-                    if (onClose) onClose();
-                }
                 return;
             }
 
@@ -1710,8 +1617,35 @@
         showRewarded: function (onOpen, onRewarded, onClose, onError) {
             var self = this;
 
-            if (this.platform === 'web' || !this.sdk && !this.vkBridge) {
-                adLog('Rewarded web fallback');
+            // VK FIX (критично для модерации): награда выдаётся ТОЛЬКО после полного просмотра
+            // rewarded-рекламы (result === true). Если рекламы нет/ошибка — награды НЕТ,
+            // показываем тост. Старая логика «выдать без рекламы» нарушала правила VK.
+            if (this.platform === 'vk' && this.vkBridge) {
+                if (onOpen) onOpen();
+                this.vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'reward' })
+                    .then(function (checkData) {
+                        if (checkData && checkData.result) {
+                            self._vkDoShowRewarded(onRewarded, onClose, onError);
+                        } else {
+                            adLog('VK reward not ready -> no grant');
+                            adToast();
+                            if (onError) onError();
+                            if (onClose) onClose();
+                        }
+                    })
+                    .catch(function () {
+                        adLog('VK reward check failed -> no grant');
+                        adToast();
+                        if (onError) onError();
+                        if (onClose) onClose();
+                    });
+                return;
+            }
+
+            // Web (локальный тест вне VK): демо-видео с явной пометкой ДЕМО.
+            // В VK этот путь не используется — там всегда platform=vk при успешном init.
+            if (this.platform === 'web') {
+                adLog('Rewarded web demo fallback');
                 if (onOpen) onOpen();
                 pokazatDemoVideo(function () {
                     if (onRewarded) onRewarded();
@@ -1720,90 +1654,7 @@
                 return;
             }
 
-            if (this.platform === 'gamepush') {
-                if (onOpen) onOpen();
-                var granted = false;
-                var cbs = {
-                    onReward: function () { granted = true; if (onRewarded) onRewarded(); },
-                    onClose: function () { if (onClose) onClose(); },
-                    onError: function () { if (onError) onError(); if (onClose) onClose(); }
-                };
-                var answered = false;
-                var fireError = function () {
-                    if (answered) return;
-                    answered = true;
-                    adToast();
-                    pokazatDemoVideo(function () {
-                        if (!granted && onRewarded) onRewarded();
-                        if (onClose) onClose();
-                    });
-                };
-                var grant = function () { if (!granted) { granted = true; if (onRewarded) onRewarded(); } };
-                try {
-                    if (self.sdk.ads && self.sdk.ads.on) {
-                        self.sdk.ads.on('reward', grant);
-                        self.sdk.ads.on('close', function () { answered = true; if (onClose) onClose(); });
-                        self.sdk.ads.on('error', function () { fireError(); });
-                    }
-                } catch (e) {}
-                var wrap = {
-                    onReward: grant,
-                    onRewarded: grant,
-                    onSuccess: grant,
-                    onClose: function () { answered = true; if (onClose) onClose(); },
-                    onError: fireError,
-                    onFail: fireError
-                };
-                try {
-                    if (self.sdk.ads && self.sdk.ads.on) {
-                        self.sdk.ads.on('rewarded:reward', grant);
-                        self.sdk.ads.on('rewarded:close', function () { answered = true; if (onClose) onClose(); });
-                    }
-                } catch (e) {}
-                var r = this._gpCall([
-                    'ads.showRewardedVideo',
-                    'showRewardedVideo',
-                    'ads.showRewarded',
-                    'showRewarded'
-                ], [wrap]);
-                if (r && typeof r.then === 'function') {
-                    r.then(function (success) {
-                        if (!answered) {
-                            answered = true;
-                            if (success !== false) grant();
-                            if (onClose) onClose();
-                        }
-                    }).catch(fireError);
-                }
-                setTimeout(function () {
-                    if (answered) return;
-                    var r2 = self._gpCall(['ads.showRewarded', 'showRewarded'], [wrap]);
-                    if (r2 && typeof r2.then === 'function') r2.catch(function () { fireError(); });
-                    setTimeout(function () { if (!answered) fireError(); }, 8000);
-                }, 12000);
-                return;
-            }
-
-            if (this.platform === 'vk' && this.vkBridge) {
-                if (onOpen) onOpen();
-                this.vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'reward' })
-                    .then(function (checkData) {
-                        if (checkData && checkData.result) {
-                            self._vkDoShowRewarded(onRewarded, onClose, onError);
-                        } else {
-                            adLog('VK reward not ready → grant without ad');
-                            if (onRewarded) onRewarded();
-                            if (onClose) onClose();
-                        }
-                    })
-                    .catch(function () {
-                        if (onRewarded) onRewarded();
-                        if (onClose) onClose();
-                    });
-                return;
-            }
-
-            if (onRewarded) onRewarded();
+            if (onError) onError();
             if (onClose) onClose();
         },
 
@@ -1842,33 +1693,26 @@
                 this.vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'interstitial' }).catch(function () {});
                 this.vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'reward' }).catch(function () {});
             }
-            if (this.platform === 'gamepush') {
-                this._gpCall(['ads.preload', 'preload'], []);
-            }
         },
 
         saveData: function (data) {
             var self = this;
+            // VK FIX: троттлинг VK Storage (лимит частоты VK). localStorage — сразу, VK — не чаще раза в 5с.
+            var nowSave = Date.now();
+            var vkAllowed = !this._lastVkSave || (nowSave - this._lastVkSave >= 5000);
             try {
                 localStorage.setItem('fs_save', JSON.stringify(data));
             } catch (e) {}
 
-            if (this.platform === 'vk' && this.vkBridge) {
+            if (this.platform === 'vk' && this.vkBridge && vkAllowed) {
+                this._lastVkSave = nowSave;
                 this.vkBridge.send('VKWebAppStorageSet', {
                     key: 'fs_save',
                     value: JSON.stringify(data)
                 }).catch(function () {});
             }
 
-            if (this.platform === 'gamepush') {
-                gpDebug('save -> player.set+sync');
-                if (this.sdk && this.sdk.player && this.sdk.player.set) {
-                    try {
-                        this.sdk.player.set('fs_save', JSON.stringify(data));
-                        if (this.sdk.player.sync) this.sdk.player.sync();
-                    } catch (e) {}
-                }
-            }
+            // VK FIX: GamePush удалён
         },
 
         loadData: function () {
@@ -1898,68 +1742,25 @@
                     return;
                 }
 
-                if (self.platform === 'gamepush') {
-                    gpDebug('load -> player.get(fs_save)');
-                    var done = function () {
-                        try {
-                            var raw = self.sdk.player.get('fs_save');
-                            if (raw) {
-                                resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-                                return;
-                            }
-                        } catch (e) {}
-                        fallback();
-                    };
-                    if (self.sdk && self.sdk.player && self.sdk.player.get) {
-                        if (self.sdk.player.ready && self.sdk.player.ready.then) {
-                            self.sdk.player.ready.then(done).catch(function () { fallback(); });
-                        } else done();
-                        return;
-                    }
-                    fallback();
-                    return;
-                }
-
                 fallback();
             });
         },
 
         leaderSubmit: function (score) {
-            if (this.platform === 'gamepush') {
-                this._gpCall([
-                    'leaders.submit',
-                    'leaderboards.submit',
-                    'submitScore',
-                    'leaders.add'
-                ], [score]);
-                adLog('GP leader submit: ' + score);
-            }
+            // VK FIX: GamePush удалён. VK-таблица требует серверный secure.addAppEvent —
+            // клиентский сабмит невозможен, показываем локальный топ.
             // VK: VKWebAppShowLeaderBoard из сабмита УДАЛЁН — он лишь показывает пустой
             // нативный борд (запись требует серверного Scores API). «ТОП» открывает localLeaders.
         },
 
         leaderShow: function () {
-            if (this.platform === 'gamepush') {
-                var r = this._gpCall([
-                    'leaders.show',
-                    'leaderboards.show',
-                    'showLeaderboard'
-                ], []);
-                if (r) {
-                    return true;
-                }
-            }
+            // VK FIX: GamePush удалён
             // В VK нет нативного метода лидерборда в Bridge — всегда показываем свой экран.
             return false;
         },
 
         getLanguage: function () {
-            try {
-                if (PlatformAdapter.platform === 'gamepush' && PlatformAdapter.sdk && PlatformAdapter.sdk.language) {
-                    var gl = PlatformAdapter.sdk.language;
-                    if (gl === 'ru' || gl === 'en') return gl;
-                }
-            } catch (e) {}
+            // VK FIX: GamePush удалён
             try {
                 var saved = localStorage.getItem('fs_lang');
                 if (saved === 'ru' || saved === 'en') {
@@ -1969,9 +1770,9 @@
                 var vkLang = params.get('vk_language') || params.get('language');
                 if (vkLang === 'ru') return 'ru';
                 if (vkLang === 'en') return 'en';
-                if (this.platform === 'gamepush') {
-                    return 'en';
-                }
+                // VK FIX: основной язык для VK — русский (требование 3.1 каталога VK).
+                // Английский — только если vk_language=en.
+                return 'ru';
                 var nav = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
                 if (nav.indexOf('ru') === 0) return 'ru';
                 return 'en';
@@ -2057,9 +1858,23 @@
         document.body.classList.remove('bannerOn');
     }
     function pokazatBannerReklamu() {
-        // Sticky/баннерная реклама НЕ подключена: у PlatformAdapter нет проверенного
-        // баннерного метода площадок (VKWebAppShowBannerAd не изобретаем).
-        // Монетизация: rewarded (×2 забега, дейлик, возрождение, free-сундук) + interstitial в паузах.
+        // VK FIX: баннер VK (VKWebAppShowBannerAd) — только в главном меню, во время игры скрыт.
+        // Баннер не перекрывает кнопки: меню получает padding-bottom (см. body.bannerOn).
+        try {
+            if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
+                PlatformAdapter.vkBridge.send('VKWebAppShowBannerAd', { mode: 'resize' })
+                    .then(function () { document.body.classList.add('bannerOn'); })
+                    .catch(function () {});
+            }
+        } catch (e) {}
+    }
+    function skrytBannerReklamu() {
+        try {
+            if (PlatformAdapter.platform === 'vk' && PlatformAdapter.vkBridge) {
+                PlatformAdapter.vkBridge.send('VKWebAppHideBannerAd').catch(function () {});
+            }
+            document.body.classList.remove('bannerOn');
+        } catch (e) {}
     }
     setInterval(function () { if (tbVariants.length) { tbIndex++; showTb(); } }, 15000);
     document.addEventListener('click', function (e) {
@@ -2207,12 +2022,21 @@
     var currentVolume = 0.4;
 
     function pauseGameForAd() {
+        // VK FIX: глушим ВСЁ — SFX (masterGain) + фоновую музыку (<audio> вне WebAudio) + пауза геймплея.
+        // Раньше музыка продолжала играть поверх рекламы.
         if (masterGain) masterGain.gain.value = 0;
+        try { var bgmA = document.getElementById('bgMusic'); if (bgmA) bgmA.pause(); } catch (e) {}
+        try { if (audioContext && audioContext.state === 'running') audioContext.suspend(); } catch (e) {}
         if (sostoyanieIgry === 'PLAY') sostoyanieIgry = 'PAUSED';
     }
 
     function resumeGameAfterAd() {
         if (masterGain) masterGain.gain.value = isMuted ? 0 : currentVolume;
+        try { if (audioContext && audioContext.state === 'suspended') audioContext.resume().catch(function () {}); } catch (e) {}
+        try {
+            var bgmB = document.getElementById('bgMusic');
+            if (bgmB && !isMuted && currentVolume > 0 && !pauzaAktivna) bgmB.play().catch(function () {});
+        } catch (e) {}
         if (sostoyanieIgry === 'PAUSED' && !pauzaAktivna) sostoyanieIgry = 'PLAY';
     }
 
@@ -2423,8 +2247,9 @@
             winWidth = window.innerWidth;
             winHeight = window.innerHeight;
         }
-        winWidth = Math.max(0, winWidth - 20);
-        winHeight = Math.max(0, winHeight - 20);
+        /* VK FIX: без -20px — игра занимает весь iframe, без «рамки» по краям */
+        winWidth = Math.max(0, winWidth);
+        winHeight = Math.max(0, winHeight);
         var aspectRatio = 9 / 16;
         var finalWidth, finalHeight;
         if (winWidth / winHeight > aspectRatio) {
@@ -2468,12 +2293,12 @@
         var slider = document.getElementById('panelZvuka');
         if (slider) {
             var s1 = Math.min(globalScale, 0.8);
-            slider.style.transform = 'translate(' + (15 * s1) + 'px, ' + (50 * s1) + 'px) scale(' + s1 + ')';
+            slider.style.transform = 'scale(' + s1 + ')';
         }
         var monet = document.getElementById('panelMonet');
         if (monet) {
             var s2 = Math.min(globalScale, 0.8);
-            monet.style.transform = 'translate(' + (-15 * s2) + 'px, ' + (50 * s2) + 'px) scale(' + s2 + ')';
+            monet.style.transform = 'scale(' + s2 + ')';
         }
         if (panelYazyka) {
             var s3 = Math.max(0.6, Math.min(globalScale, 1));
@@ -2740,7 +2565,7 @@
             dailyX2: 'x2 FOR VIDEO',
             dailyClose: 'CLOSE',
             dailyReady: 'READY!',
-            leaderTitle: 'LEADERBOARD',
+            leaderTitle: 'MY RECORDS (LOCAL)',
             leaderClose: 'CLOSE',
             leaderEmpty: 'No records yet. Be the first!',
             tutTitle: 'HOW TO PLAY',
@@ -2799,6 +2624,12 @@
             lb_you: 'You',
             lb_best: 'Best',
             b_share: 'Brag your record to friends!',
+            helpTitle: 'HOW TO PLAY',
+            privTitle: 'PRIVACY',
+            supTitle: 'SUPPORT',
+            helpText: 'HOW TO PLAY\n\n1. Press PLAY and tap the screen (or press SPACE) to throw a knife at the rotating target.\n2. Do not hit other knives or spikes — one mistake ends the run.\n3. Knock gold coins off the edge of the target — the only currency in the game.\n4. Clear all knives to unlock the next level. Every 5 levels — a boss!\n5. Spend coins in the ARMORY on new blades and chests. Once a day a FREE CHEST is available for watching a video.\n6. Complete daily quests, claim daily rewards and unlock achievements.\n\nControls: tap / click / SPACE. Pause — the ❚❚ button at the top. Sound is toggled with 🔊. Language with 🌐.',
+            privText: 'PRIVACY POLICY\n\nPIRATE THROW runs in VK Games and processes data only to run the game:\n\n• VK user name and ID (via VK Bridge) — to show your name in the leaderboard and save progress.\n• Game progress (coins, skins, levels, records) — stored in VK Storage and locally in the browser (localStorage).\n• Ads: VK native ads only (VKWebAppShowNativeAds). No third-party ad networks.\n\nWe do not share personal data with third parties, do not require registration outside VK, and do not store data on our own servers. Deleting the game or clearing browser data removes the local copy. The cloud copy in VK Storage is removed when you delete the app in VK.\n\nQuestions: support@pirate-throw.example — we reply within 3 business days.',
+            supText: 'SUPPORT\n\nFound a bug, the game froze, or progress was not saved?\n\n1. Try restarting the game and checking your connection.\n2. If the problem persists, contact us:\n   • Email: support@pirate-throw.example\n   • Game community in VKontakte (link in the app description in the VK Games catalog).\n\nPlease include your VK ID, level, what happened, and a screenshot if possible. We reply within 3 business days.\n\nThanks for playing PIRATE THROW!',
             ch1: 'Smuggler Pier', ch2: 'Kraken Bay', ch3: 'Powder Room', ch4: 'Dead Harbor', ch5: 'Coral Reef',
             ch6: 'Ice Latitudes', ch7: 'Storm Cape', ch8: 'Skull Island', ch9: 'Golden Hold', ch10: 'Endless Drift'
         },
@@ -2869,7 +2700,7 @@
             dailyX2: 'x2 ЗА ВИДЕО',
             dailyClose: 'ЗАКРЫТЬ',
             dailyReady: 'ГОТОВО!',
-            leaderTitle: 'ТАБЛИЦА ЛИДЕРОВ',
+            leaderTitle: 'МОИ РЕКОРДЫ (ЛОКАЛЬНО)',
             leaderClose: 'ЗАКРЫТЬ',
             leaderEmpty: 'Пока нет рекордов. Будь первым!',
             tutTitle: 'КАК ИГРАТЬ',
@@ -2928,6 +2759,12 @@
             lb_you: 'Вы',
             lb_best: 'Лучший',
             b_share: 'Похвались рекордом друзьям!',
+            helpTitle: 'КАК ИГРАТЬ',
+            privTitle: 'КОНФИДЕНЦИАЛЬНОСТЬ',
+            supTitle: 'ПОДДЕРЖКА',
+            helpText: 'КАК ИГРАТЬ\n\n1. Нажми ИГРАТЬ и тапни по экрану (или нажми ПРОБЕЛ), чтобы метнуть нож во вращающуюся мишень.\n2. Не попадай в другие ножи и шипы — одна ошибка завершает забег.\n3. Сбивай золотые монеты с края мишени — это единственная валюта игры.\n4. Пройди все ножи уровня, чтобы открыть следующий. Каждые 5 уровней — босс!\n5. Трать монеты в ОРУЖЕЙНОЙ на новые клинки и сундуки. Раз в сутки доступен БЕСПЛАТНЫЙ СУНДУК за просмотр видео.\n6. Выполняй квесты дня, забирай ежедневную награду и открывай достижения.\n\nУправление: тап / клик / ПРОБЕЛ. Пауза — кнопка ❚❚ сверху. Звук отключается кнопкой 🔊. Язык переключается кнопкой 🌐.',
+            privText: 'ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ\n\nИгра PIRATE THROW работает в VK Games и обрабатывает данные только для работы игры:\n\n• Имя и ID пользователя VK (через VK Bridge) — чтобы показывать имя в топе и сохранять прогресс.\n• Прогресс игры (монеты, скины, уровни, рекорды) — хранится в VK Storage и локально в браузере (localStorage).\n• Реклама: нативная реклама VK (VKWebAppShowNativeAds). Сторонние рекламные сети не используются.\n\nМы не передаём персональные данные третьим лицам, не требуем регистрации вне VK и не храним данные на собственных серверах. Если вы удалите игру или очистите данные браузера, локальная копия прогресса будет удалена. Облачная копия в VK Storage удаляется вместе с удалением приложения в VK.\n\nВопросы: support@pirate-throw.example — ответим в течение 3 рабочих дней.',
+            supText: 'ПОДДЕРЖКА И ПОМОЩЬ\n\nНашли баг, игра зависла или прогресс не сохранился?\n\n1. Попробуйте перезапустить игру и проверить интернет.\n2. Если проблема повторяется — напишите нам:\n   • Email: support@pirate-throw.example\n   • Сообщество игры во ВКонтакте (ссылка — в описании приложения в каталоге VK Games).\n\nУкажите в письме: ваш ID в VK, уровень, что именно произошло и скриншот, если возможно. Ответим в течение 3 рабочих дней.\n\nСпасибо, что играете в PIRATE THROW!',
             ch1: 'Пирс контрабандистов', ch2: 'Бухта кракена', ch3: 'Пороховой погреб', ch4: 'Мёртвая гавань', ch5: 'Коралловый риф',
             ch6: 'Ледяные широты', ch7: 'Штормовой мыс', ch8: 'Остров черепа', ch9: 'Золотой трюм', ch10: 'Бесконечный дрейф'
         }
@@ -2955,6 +2792,21 @@
         if (el('ui_chest')) el('ui_chest').innerText = t('chest');
         if (el('ui_chance')) el('ui_chance').innerText = t('chance');
         if (el('knopkaSunduk')) el('knopkaSunduk').innerText = t('open') + ' (30)';
+        // VK FIX: язык страницы + новые экраны (помощь/конфиденциальность/поддержка) + бесплатный сундук
+        try { document.documentElement.lang = currentLang; } catch (e) {}
+        if (el('knopkaHelp')) el('knopkaHelp').innerText = '? ' + t('helpTitle');
+        if (el('knopkaPrivacy')) el('knopkaPrivacy').innerText = t('privTitle');
+        if (el('knopkaSupport')) el('knopkaSupport').innerText = t('supTitle');
+        if (el('ui_helpTitle')) el('ui_helpTitle').innerText = t('helpTitle');
+        if (el('ui_privTitle')) el('ui_privTitle').innerText = t('privTitle');
+        if (el('ui_supTitle')) el('ui_supTitle').innerText = t('supTitle');
+        if (el('ui_helpText')) el('ui_helpText').innerText = t('helpText');
+        if (el('ui_privText')) el('ui_privText').innerText = t('privText');
+        if (el('ui_supText')) el('ui_supText').innerText = t('supText');
+        if (el('knopkaZakrytHelp')) el('knopkaZakrytHelp').innerText = t('back');
+        if (el('knopkaZakrytPrivacy')) el('knopkaZakrytPrivacy').innerText = t('back');
+        if (el('knopkaZakrytSupport')) el('knopkaZakrytSupport').innerText = t('back');
+        if (typeof obnovitFreeChestBtn === 'function') obnovitFreeChestBtn();
         if (el('knopkaNazadIzMagazina')) el('knopkaNazadIzMagazina').innerText = t('back');
         if (el('knopkaKvesty')) el('knopkaKvesty').innerText = t('quests');
         if (el('ui_questsTitle')) el('ui_questsTitle').innerText = t('quests');
@@ -3182,6 +3034,7 @@
     }
 
     function zapuskUrovnya(n) {
+        try { skrytBannerReklamu(); } catch (e) {}
         sbrosIgry();
         uroven = n;
         var bn = 5 + Math.floor(n / 3);
@@ -3440,6 +3293,38 @@
     if (knopkaDailyClose) knopkaDailyClose.onclick = function () {
         if (ekranDaily) ekranDaily.classList.add('skryto');
     };
+    // VK FIX: экраны помощи/конфиденциальности/поддержки (требования 3.2, 5.1, 5.2 каталога VK)
+    function otkrytEkran(id) {
+        var e = document.getElementById(id);
+        if (uiGlavnoeMenu) uiGlavnoeMenu.classList.add('skryto');
+        if (e) e.classList.remove('skryto');
+    }
+    function zakrytEkran(id) {
+        var e = document.getElementById(id);
+        if (e) e.classList.add('skryto');
+        if (uiGlavnoeMenu) uiGlavnoeMenu.classList.remove('skryto');
+    }
+    var knopkaHelp = document.getElementById('knopkaHelp');
+    if (knopkaHelp) knopkaHelp.onclick = function () { otkrytEkran('ekranHelp'); };
+    var knopkaPrivacy = document.getElementById('knopkaPrivacy');
+    if (knopkaPrivacy) knopkaPrivacy.onclick = function () { otkrytEkran('ekranPrivacy'); };
+    var knopkaSupport = document.getElementById('knopkaSupport');
+    if (knopkaSupport) knopkaSupport.onclick = function () { otkrytEkran('ekranSupport'); };
+    var knopkaZakrytHelp = document.getElementById('knopkaZakrytHelp');
+    if (knopkaZakrytHelp) knopkaZakrytHelp.onclick = function () { zakrytEkran('ekranHelp'); };
+    var knopkaZakrytPrivacy = document.getElementById('knopkaZakrytPrivacy');
+    if (knopkaZakrytPrivacy) knopkaZakrytPrivacy.onclick = function () { zakrytEkran('ekranPrivacy'); };
+    var knopkaZakrytSupport = document.getElementById('knopkaZakrytSupport');
+    if (knopkaZakrytSupport) knopkaZakrytSupport.onclick = function () { zakrytEkran('ekranSupport'); };
+    // VK FIX: состояние кнопки бесплатного сундука (раз в сутки, за rewarded)
+    function obnovitFreeChestBtn() {
+        var b = document.getElementById('knopkaSunduk');
+        if (!b) return;
+        var today = segodnyaData();
+        var taken = (chestFreeDate === today);
+        b.disabled = taken;
+        b.innerText = taken ? ('🎁 ' + t('freeDone')) : ('🎁 ' + t('freeChest'));
+    }
 
     // =========================================================
     // ЛИДЕРБОРД
@@ -3606,6 +3491,7 @@
                 if (chestFreeDate === today) return;
                 chestFreeDate = today;
                 saveData();
+                try { obnovitFreeChestBtn(); } catch (e) {}
                 fxStart(n, chestRoll(n)); // лут начисляется сразу внутри fxStart
             },
             resumeGameAfterAd,
@@ -3704,6 +3590,7 @@
     };
 
     function otrisovatMagazin() {
+        try { obnovitFreeChestBtn(); } catch (e) {}
         if (!uiSetkaSkinov) return;
         var h = '';
         vseSkins.forEach(function (s) {
@@ -3786,6 +3673,7 @@
 
     function vozvratVMenyu() {
         saveData();
+        try { pokazatBannerReklamu(); } catch (e) {}
         sostoyanieIgry = 'MENU';
         pauzaAktivna = false;
         if (uiEkranProigrysha) uiEkranProigrysha.classList.add('skryto');
@@ -4741,12 +4629,25 @@
         window.visualViewport.addEventListener('resize', forceResize);
         window.visualViewport.addEventListener('scroll', forceResize);
     }
-    window.addEventListener('load', function () {
+    // VK FIX: старт по DOMContentLoaded (не ждём load — music.mp3/картинки могут тормозить).
+    // Страховка: если что-то упало, прелоадер всё равно скрывается и показывается меню.
+    window.addEventListener('error', function () {
+        try { setTimeout(finishLoading, 500); } catch (e) {}
+    });
+    function startOnce() {
+        if (window.__ptStarted) return;
+        window.__ptStarted = true;
         setTimeout(forceResize, 100);
         setTimeout(forceResize, 500);
         setTimeout(forceResize, 1000);
         initGame();
-    });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startOnce);
+    } else {
+        startOnce();
+    }
+    setTimeout(startOnce, 3000); // страховка, если DOMContentLoaded пропущен
 
 
 
